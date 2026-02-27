@@ -1,0 +1,65 @@
+# Dependency directories
+node_modules/
+vendor/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Data Files (Ignored for privacy / size)
+Landslide_Final_Cleaned_V2.csv
+latest_predictions.json
+
+# Environment
+.env
+.venv
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Android Build artifacts
+Landslideproject_cola/.gradle/
+Landslideproject_cola/build/
+Landslideproject_cola/*/build/
+Landslideproject_cola/local.properties
+Landslideproject_cola/*.iml
+Landslideproject_cola/.cxx/
+Landslideproject_cola/.externalNativeBuild/
+Landslideproject_cola/app/release/
+Landslideproject_cola/app/build/
