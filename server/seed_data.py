@@ -2,6 +2,8 @@ import pandas as pd
 import mysql.connector
 import os
 import json
+import uuid
+import bcrypt
 
 # Database configuration
 DB_CONFIG = {
@@ -87,7 +89,7 @@ def seed_database():
     # 3. Insert into static_nodes table
     print(f"Inserting {len(df)} nodes into 'static_nodes' table...")
     node_insert_query = """
-    INSERT INTO static_nodes (
+    INSERT IGNORE INTO static_nodes (
         grid_id, latitude, longitude, 
         elevation_extracted, slope_extracted, aspect_extracted, 
         modis_lc, ndvi, ndwi, twi, soil_type, road_zone
@@ -144,9 +146,27 @@ def seed_database():
         return
     finally:
         cursor.close()
-        conn.close()
 
-    # 4. Final Output
+    # 4. Seed Admin User
+    print("Seeding Admin User...")
+    cursor = conn.cursor()
+    admin_email = "admin@admin.com"
+    cursor.execute("SELECT user_id FROM users WHERE email = %s", (admin_email,))
+    if not cursor.fetchone():
+        admin_id = str(uuid.uuid4())
+        admin_hash = bcrypt.hashpw('admin'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        cursor.execute(
+            "INSERT INTO users (user_id, name, email, password_hash, role) VALUES (%s, %s, %s, %s, %s)",
+            (admin_id, "System Admin", admin_email, admin_hash, "admin")
+        )
+        conn.commit()
+        print(f"Created Admin account: {admin_email} / pass: admin")
+    else:
+        print(f"Admin account {admin_email} already exists.")
+    cursor.close()
+    conn.close()
+
+    # 5. Final Output
     print("-" * 30)
     print("Database seeding completed.")
     print(f"Unique Grids Processed: {len(unique_grids)}")

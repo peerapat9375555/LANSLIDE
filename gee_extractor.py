@@ -95,11 +95,10 @@ def build_combined_image():
     ndvi_filled = ndvi.unmask(ndvi.focal_mean(3, 'circle', 'pixels')).unmask(0)
     ndwi_filled = ndwi.unmask(ndwi.focal_mean(3, 'circle', 'pixels')).unmask(0)
     
-    # Correct Distance to Road (in meters)
-    # Using GRIP4 Global Roads dataset or a simple distance function
-    roads = ee.FeatureCollection("projects/sat-io/open-datasets/GRIP4/GlobalRoads")
-    # Calculate distance to nearest road in meters
-    distance_to_road = roads.distance(searchRadius=10000, maxError=50).rename('Distance_to_Road')
+    # Distance to Road - use constant fallback (200m = road_zone 3)
+    # GRIP4/OSM road datasets are often unavailable on GEE 
+    # Road_zone will be set to a median value; can be refined later if a road dataset becomes available
+    distance_to_road = ee.Image.constant(200).rename('Distance_to_Road')
     
     # Combine
     combined = (dem.rename('Elevation')

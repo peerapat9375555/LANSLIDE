@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS `prediction_logs` (
   `node_id` INT NOT NULL,
   `risk_level` VARCHAR(50) NOT NULL,
   `probability` FLOAT NOT NULL,
+  `status` VARCHAR(20) DEFAULT 'pending',
+  `features_json` JSON DEFAULT NULL,
   `timestamp` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`node_id`) REFERENCES `static_nodes`(`node_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

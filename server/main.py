@@ -33,6 +33,7 @@ SECRET_KEY = "landslide_secret_key_2025"
 STATIC_DATA_CACHE = None
 ML_MODEL = None
 SCALER = None
+LOCATION_LOOKUP_DF = None
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -57,6 +58,13 @@ class RegisterRequest(BaseModel):
     password: str
     role: Optional[str] = "user"
 
+class VerifyAlertRequest(BaseModel):
+    action: str
+
+class UpdateEmergencyRequest(BaseModel):
+    service_name: str
+    phone_number: str
+
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -74,7 +82,7 @@ def get_db_connection():
         return None
 
 def load_resources():
-    global STATIC_DATA_CACHE, ML_MODEL, SCALER
+    global STATIC_DATA_CACHE, ML_MODEL, SCALER, LOCATION_LOOKUP_DF
     
     print("Loading ML Model...")
     try:
@@ -87,6 +95,15 @@ def load_resources():
         SCALER = joblib.load(os.path.join(PROJECT_ROOT, 'landslide_scaler.pkl'))
     except Exception as e:
         print("Warning: landslide_scaler.pkl not found.")
+
+    print("Loading Location Lookup CSV...")
+    csv_path = os.path.join(PROJECT_ROOT, 'nan_province_data.csv')
+    try:
+        LOCATION_LOOKUP_DF = pd.read_csv(csv_path)
+        print(f"Loaded {len(LOCATION_LOOKUP_DF)} location records for tambon/district lookup.")
+    except Exception as e:
+        print(f"Warning: nan_province_data.csv not found: {e}")
+        LOCATION_LOOKUP_DF = None
         
     print("Loading Static Nodes from Database into Cache...")
     conn = get_db_connection()
@@ -99,6 +116,18 @@ def load_resources():
             print(f"Failed to load static_nodes table: {e}")
         finally:
             conn.close()
+
+def lookup_tambon_district(lat, lon):
+    """Find nearest tambon/district from CSV by lat/lon."""
+    if LOCATION_LOOKUP_DF is None or LOCATION_LOOKUP_DF.empty:
+        return None, None
+    try:
+        df = LOCATION_LOOKUP_DF
+        dist = ((df['LATITUDE'] - lat)**2 + (df['LONGITUDE'] - lon)**2)
+        idx = dist.idxmin()
+        return str(df.loc[idx, 'TAMBON']), str(df.loc[idx, 'DISTRICT'])
+    except:
+        return None, None
 
 @app.on_event("startup")
 async def startup_event():
@@ -278,25 +307,14 @@ async def trigger_prediction():
             color = "#FFFF00"
             
         log_id = str(uuid.uuid4())
-        log_inserts.append((log_id, node_id, risk, prob))
         
-        if conn and risk == "High":
-            # 2. Trigger Notification logic
-            try:
-                cursor.execute("SELECT user_id FROM user_pinned_locations WHERE nearest_node_id = %s", (node_id,))
-                pinned_users = cursor.fetchall()
-                for user_result in pinned_users:
-                    notif_id = str(uuid.uuid4())
-                    notification_inserts.append((
-                        notif_id, 
-                        user_result[0], 
-                        log_id, 
-                        "High Risk Alert", 
-                        "A critical landslide risk has been detected near your pinned location over the next 24 hours."
-                    ))
-            except Exception as e:
-                print(f"Error querying users for notification: {e}")
-                
+        # Capture the 23 features from this row
+        row_features = df.iloc[i][FEATURE_ORDER].to_dict()
+        features_json = json.dumps(row_features)
+        
+        # Appending status 'pending' and features_json
+        log_inserts.append((log_id, node_id, risk, prob, 'pending', features_json))
+        
         poly = calculate_2x2_polygon(row['latitude'], row['longitude'])
         response_payload.append({
             "id": str(node_id),
@@ -309,13 +327,12 @@ async def trigger_prediction():
         
     if conn:
         try:
-            # Batch insert prediction_logs
+            # Batch insert prediction_logs in chunks to avoid max_allowed_packet
+            BATCH_SIZE = 200
             if log_inserts:
-                cursor.executemany("INSERT INTO prediction_logs (log_id, node_id, risk_level, probability) VALUES (%s, %s, %s, %s)", log_inserts)
-            
-            # Batch insert notifications
-            if notification_inserts:
-                cursor.executemany("INSERT INTO notifications (notification_id, user_id, log_id, title, message) VALUES (%s, %s, %s, %s, %s)", notification_inserts)
+                for i in range(0, len(log_inserts), BATCH_SIZE):
+                    batch = log_inserts[i:i+BATCH_SIZE]
+                    cursor.executemany("INSERT INTO prediction_logs (log_id, node_id, risk_level, probability, status, features_json) VALUES (%s, %s, %s, %s, %s, %s)", batch)
                 
             conn.commit()
         except Exception as e:
@@ -328,7 +345,7 @@ async def trigger_prediction():
     with open(os.path.join(PROJECT_ROOT, 'latest_predictions.json'), 'w') as f:
         json.dump(response_payload, f)
         
-    return {"status": "success", "grids_fetched": len(unique_grids), "points_predicted": len(response_payload), "notifications_triggered": len(notification_inserts)}
+    return {"status": "success", "grids_fetched": len(unique_grids), "points_predicted": len(response_payload)}
 
 
 @app.get("/api/predictions", response_model=List[PredictionResponseItem])
@@ -543,3 +560,450 @@ async def get_all_users():
     finally:
         cursor.close()
         conn.close()
+
+# =============================================================
+# ADMIN: GET PENDING ALERTS
+# =============================================================
+@app.get("/api/admin/alerts/pending")
+async def get_pending_alerts():
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        query = """
+        SELECT pl.log_id, pl.node_id, pl.risk_level, pl.probability, pl.timestamp, 
+               sn.latitude, sn.longitude
+        FROM prediction_logs pl
+        JOIN static_nodes sn ON pl.node_id = sn.node_id
+        WHERE pl.status = 'pending'
+        ORDER BY pl.timestamp DESC
+        """
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        for row in rows:
+            for key, val in row.items():
+                if isinstance(val, (datetime.datetime, datetime.date)):
+                    row[key] = val.isoformat()
+            tambon, district = lookup_tambon_district(float(row['latitude']), float(row['longitude']))
+            row['tambon'] = tambon
+            row['district'] = district
+        return rows
+    except Exception as e:
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# ADMIN: GET ALERT HISTORY (approved alerts)
+# =============================================================
+@app.get("/api/admin/alerts/history")
+async def get_alert_history():
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        query = """
+        SELECT pl.log_id, pl.node_id, pl.risk_level, pl.probability, pl.timestamp, 
+               sn.latitude, sn.longitude
+        FROM prediction_logs pl
+        JOIN static_nodes sn ON pl.node_id = sn.node_id
+        WHERE pl.status = 'approved'
+        ORDER BY pl.timestamp DESC
+        """
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        for row in rows:
+            for key, val in row.items():
+                if isinstance(val, (datetime.datetime, datetime.date)):
+                    row[key] = val.isoformat()
+            tambon, district = lookup_tambon_district(float(row['latitude']), float(row['longitude']))
+            row['tambon'] = tambon
+            row['district'] = district
+        return rows
+    except Exception as e:
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# ADMIN: GET ALERT DETAILS
+# =============================================================
+@app.get("/api/admin/alerts/{log_id}")
+async def get_alert_details(log_id: str):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT pl.*, rg.rain_values_json, sn.latitude, sn.longitude
+            FROM prediction_logs pl
+            JOIN static_nodes sn ON pl.node_id = sn.node_id
+            LEFT JOIN rain_grids rg ON sn.grid_id = rg.grid_id
+            WHERE pl.log_id = %s
+        """, (log_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Alert not found")
+            
+        for key, val in row.items():
+            if isinstance(val, (datetime.datetime, datetime.date)):
+                row[key] = val.isoformat()
+                
+        if isinstance(row.get('features_json'), str):
+            try:
+                row['features_json'] = json.loads(row['features_json'])
+            except:
+                pass
+        if isinstance(row.get('rain_values_json'), str):
+            try:
+                row['rain_values_json'] = json.loads(row['rain_values_json'])
+            except:
+                pass
+        
+        tambon, district = lookup_tambon_district(float(row['latitude']), float(row['longitude']))
+        row['tambon'] = tambon
+        row['district'] = district
+                
+        return row
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# ADMIN: VERIFY ALERT (Approve/Reject)
+# =============================================================
+@app.put("/api/admin/alerts/{log_id}/verify")
+async def verify_alert(log_id: str, payload: VerifyAlertRequest):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        new_status = 'approved' if payload.action.lower() == 'approve' else 'rejected'
+        cursor.execute("UPDATE prediction_logs SET status = %s WHERE log_id = %s", (new_status, log_id))
+        
+        notifications_sent = 0
+        if new_status == 'approved':
+            cursor.execute("SELECT node_id, risk_level FROM prediction_logs WHERE log_id = %s", (log_id,))
+            log = cursor.fetchone()
+            if log and log['risk_level'] in ['High', 'Medium']:
+                cursor.execute("SELECT user_id FROM user_pinned_locations WHERE nearest_node_id = %s", (log['node_id'],))
+                pinned_users = cursor.fetchall()
+                notification_inserts = []
+                
+                title = "High Risk Alert" if log['risk_level'] == 'High' else "Medium Risk Notice"
+                msg = f"A {log['risk_level'].lower()} landslide risk has been officially verified near your pinned location."
+                
+                for user_result in pinned_users:
+                    notifications_sent += 1
+                    notification_inserts.append((
+                        str(uuid.uuid4()), 
+                        user_result['user_id'], 
+                        log_id, 
+                        title, 
+                        msg
+                    ))
+                    
+                if notification_inserts:
+                    cursor.executemany("INSERT INTO notifications (notification_id, user_id, log_id, title, message) VALUES (%s, %s, %s, %s, %s)", notification_inserts)
+                    
+        conn.commit()
+        return {"status": "success", "message": f"Alert {new_status}", "notifications_sent": notifications_sent}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# ADMIN: UPDATE EMERGENCY SERVICE
+# =============================================================
+@app.put("/api/emergency/{service_id}")
+async def update_emergency(service_id: int, payload: UpdateEmergencyRequest):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE emergency_services SET service_name = %s, phone_number = %s WHERE service_id = %s", 
+                      (payload.service_name, payload.phone_number, service_id))
+        conn.commit()
+        return {"status": "success", "message": "Emergency contact updated."}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# ADMIN: ADD EMERGENCY SERVICE
+# =============================================================
+@app.post("/api/emergency")
+async def add_emergency_service(payload: UpdateEmergencyRequest):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO emergency_services (service_name, phone_number) VALUES (%s, %s)", 
+                      (payload.service_name, payload.phone_number))
+        conn.commit()
+        return {"status": "success", "message": "Emergency contact added."}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+# =============================================================
+# USER: GET PIN DASHBOARD
+# =============================================================
+@app.get("/api/pins/{pin_id}/dashboard")
+async def get_pin_dashboard(pin_id: str):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        query = """
+            SELECT p.label, p.latitude, p.longitude, rg.rain_values_json 
+            FROM user_pinned_locations p
+            JOIN static_nodes sn ON p.nearest_node_id = sn.node_id
+            LEFT JOIN rain_grids rg ON sn.grid_id = rg.grid_id
+            WHERE p.pin_id = %s
+        """
+        cursor.execute(query, (pin_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Pin not found")
+            
+        rain_data = []
+        if row.get('rain_values_json') and isinstance(row['rain_values_json'], str):
+            try:
+                rain_data = json.loads(row['rain_values_json'])
+            except:
+                pass
+                
+        return {
+            "label": row['label'],
+            "latitude": float(row['latitude']),
+            "longitude": float(row['longitude']),
+            "rain_trend": rain_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# USER: CLEAR PINS
+# =============================================================
+@app.delete("/api/pins/{user_id}")
+async def clear_user_pins(user_id: str):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM user_pinned_locations WHERE user_id = %s", (user_id,))
+        deleted_count = cursor.rowcount
+        conn.commit()
+        return {"status": "success", "message": f"Cleared {deleted_count} pins.", "deleted": deleted_count}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# USER: GET PINS
+# =============================================================
+@app.get("/api/pins/user/{user_id}")
+async def get_user_pins(user_id: str):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT pin_id, latitude, longitude, label FROM user_pinned_locations WHERE user_id = %s", (user_id,))
+        rows = cursor.fetchall()
+        for r in rows:
+            r['latitude'] = float(r['latitude'])
+            r['longitude'] = float(r['longitude'])
+        return rows
+    except Exception as e:
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# ADMIN: TRIGGER GEE (static features - rarely changes)
+# =============================================================
+@app.post("/trigger-gee")
+async def trigger_gee():
+    """Fetch static features from Google Earth Engine and update DB."""
+    global STATIC_DATA_CACHE
+    import sys, math
+    
+    # Add parent dir so we can import gee_extractor
+    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    
+    try:
+        from gee_extractor import initialize_gee, build_combined_image
+        import ee
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"Missing GEE dependencies: {e}. Install: pip install earthengine-api python-dotenv")
+    
+    # Load .env for GEE_PROJECT_ID
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(parent_dir, '.env'))
+    
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    
+    try:
+        # 0. Clean up duplicates (keep lowest node_id per lat/lon pair)
+        cursor = conn.cursor(dictionary=True)
+        print("[GEE] Checking for duplicate nodes...")
+        cursor.execute("""
+            DELETE s1 FROM static_nodes s1
+            INNER JOIN static_nodes s2
+            WHERE s1.node_id > s2.node_id
+            AND s1.latitude = s2.latitude
+            AND s1.longitude = s2.longitude
+        """)
+        deleted = cursor.rowcount
+        if deleted > 0:
+            conn.commit()
+            print(f"[GEE] Removed {deleted} duplicate nodes.")
+        
+        # 1. Read all nodes from DB
+        cursor.execute("SELECT node_id, latitude, longitude FROM static_nodes")
+        nodes = cursor.fetchall()
+        if not nodes:
+            raise HTTPException(status_code=400, detail="No nodes found in static_nodes table")
+        
+        print(f"[GEE] Starting extraction for {len(nodes)} nodes...")
+        
+        # 2. Initialize GEE and build image
+        initialize_gee()
+        combined_img = build_combined_image()
+        print("[GEE] Combined image ready.")
+        
+        # 3. Helper: convert distance to road_zone
+        def distance_to_road_zone(dist_meters):
+            if dist_meters is None: return 5
+            if dist_meters <= 50: return 1
+            elif dist_meters <= 100: return 2
+            elif dist_meters <= 200: return 3
+            elif dist_meters <= 500: return 4
+            else: return 5
+        
+        # 4. Process in chunks
+        CHUNK_SIZE = 500
+        updated_count = 0
+        
+        for chunk_start in range(0, len(nodes), CHUNK_SIZE):
+            chunk = nodes[chunk_start:chunk_start + CHUNK_SIZE]
+            print(f"[GEE] Processing chunk {chunk_start // CHUNK_SIZE + 1}/{math.ceil(len(nodes) / CHUNK_SIZE)} ({len(chunk)} nodes)...")
+            
+            # Create ee.FeatureCollection
+            ee_features = []
+            for node in chunk:
+                geom = ee.Geometry.Point([float(node['longitude']), float(node['latitude'])])
+                feat = ee.Feature(geom, {'node_id': node['node_id']})
+                ee_features.append(feat)
+            
+            ee_fc = ee.FeatureCollection(ee_features)
+            
+            try:
+                results = combined_img.sampleRegions(
+                    collection=ee_fc,
+                    scale=500,
+                    geometries=False
+                ).getInfo()['features']
+            except Exception as e:
+                print(f"[GEE] Error on chunk starting at {chunk_start}: {e}")
+                continue
+            
+            # 5. Update DB for each result
+            update_sql = """
+                UPDATE static_nodes SET
+                    elevation_extracted = %s,
+                    slope_extracted = %s,
+                    aspect_extracted = %s,
+                    modis_lc = %s,
+                    ndvi = %s,
+                    ndwi = %s,
+                    twi = %s,
+                    soil_type = %s,
+                    road_zone = %s
+                WHERE node_id = %s
+            """
+            
+            batch_updates = []
+            for f in results:
+                props = f.get('properties', {})
+                nid = props.get('node_id')
+                if nid is None:
+                    continue
+                
+                elevation = props.get('Elevation', 0) or 0
+                slope = props.get('Slope', 0) or 0
+                aspect = props.get('Aspect', 0) or 0
+                modis_lc = props.get('MODIS_LC', 0) or 0
+                ndvi = props.get('NDVI', 0) or 0
+                ndwi = props.get('NDWI', 0) or 0
+                twi = props.get('TWI', 0) or 0
+                soil_type = props.get('Soil_Type', 0) or 0
+                dist_road = props.get('Distance_to_Road', 5000) or 5000
+                road_zone = distance_to_road_zone(dist_road)
+                
+                batch_updates.append((elevation, slope, aspect, modis_lc, ndvi, ndwi, twi, soil_type, road_zone, nid))
+            
+            if batch_updates:
+                cursor.executemany(update_sql, batch_updates)
+                conn.commit()
+                updated_count += len(batch_updates)
+                print(f"[GEE] Updated {len(batch_updates)} nodes in this chunk. Total: {updated_count}")
+        
+        # 6. Reload cache
+        cursor.close()
+        query = "SELECT * FROM static_nodes"
+        STATIC_DATA_CACHE = pd.read_sql(query, conn)
+        
+        print(f"[GEE] Done! Updated {updated_count} nodes. Cache reloaded with {len(STATIC_DATA_CACHE)} nodes.")
+        return {"status": "success", "message": f"Fetched GEE data and updated {updated_count} nodes. Cache reloaded."}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[GEE] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+# =============================================================
+# ADMIN: TRIGGER RAIN FETCH + PREDICT
+# =============================================================
+@app.post("/trigger-rain")
+async def trigger_rain():
+    """Fetch rain from Open-Meteo and run ML prediction."""
+    return await trigger_prediction()
