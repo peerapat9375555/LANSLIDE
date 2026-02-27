@@ -1,77 +1,73 @@
-# Landslide & Earthquake Prediction System
+# ระบบพยากรณ์และแจ้งเตือนภัยดินถล่ม (Landslide Warning System)
 
-This project contains the backend server and Android application for the Landslide Prediction System. 
+โปรเจคนี้คือระบบแจ้งเตือนและประเมินความเสี่ยงดินถล่ม ประกอบด้วย 2 ส่วนหลักคือ **API Backend** และแอปพลิเคชัน **Android**
 
-## 🚀 Architecture Updates
-In a recent update, the backend architecture was streamlined:
-1. **Single Server Architecture**: The former Node.js server (`server.js`) has been completely merged into the Python FastAPI server (`server/main.py`). Everything now runs on a single Python backend listening on **Port 8000**.
-2. **OSMDroid Map**: The Android app migrated from Google Maps Compose to **OSMDroid**, making it 100% free and removing the need for any Google API keys.
-3. **Database**: Still relies on a local MySQL (XAMPP) instance.
+## 🚀 สรุปสถาปัตยกรรม (อัปเดตล่าสุด)
+1. **เซิร์ฟเวอร์แบบเดี่ยว (Single Server Architecture)**: ระบบเก่าที่เคยแยกใช้ Node.js (`server.js`) ถูกยุบรวมเข้ากับ **Python FastAPI** (`server/main.py`) แล้ว การทำงานทั้งหมด (AI โมเดล, ล็อกอินผู้ใช้, ระบบแจ้งเตือน) รันบนเซิร์ฟเวอร์ Python ตัวเดียวที่ **Port 8000**
+2. **แผนที่ OSMDroid**: แอปพลิเคชันฝั่ง Android เปลี่ยนไปใช้ **OSMDroid (OpenStreetMap)** ทำให้สามารถวาดแผนที่และ Polygon ได้ครบถ้วนโดย **ฟรี 100%** (ไม่ต้องใช้ Google Maps API Key และไม่ต้องผูกบัตรเครดิต)
+3. **ฐานข้อมูล**: ยังคงใช้ MySQL ผ่านโปรแกรมจำลอง เช่น XAMPP 
 
-## 📂 Project Structure
-- `Landslideproject_cola/` - The Android Kotlin/Jetpack Compose Application.
-- `server/main.py` - The FastAPI Backend (handles AI model inference + ALL auth/user endpoints).
-- `update_db.sql` - The latest MySQL schema containing all 6 required tables.
-- `best_ml_model.pkl` - Pre-trained Random Forest model for landslide risk prediction.
-- `.gitignore` - Standard filters (Note: `Landslide_Final_Cleaned_V2.csv` is ignored due to size).
-
----
-
-## 🛠️ Step 1: Database Setup
-1. Open **XAMPP Control Panel** and Start **MySQL**.
-2. Open phpMyAdmin (`http://localhost/phpmyadmin`).
-3. Create a new database named `landsnot_db`.
-4. Import `update_db.sql` to create all required tables (`rain_grids`, `static_nodes`, `users`, `user_pinned_locations`, `prediction_results`, `notifications`).
-5. (Optional but recommended) Run `python server/seed_data.py` to populate initial grid geometry.
+## 📂 โครงสร้างโปรเจค
+- `Landslideproject_cola/` - ซอร์สโค้ดฝั่ง Android (สร้างด้วย Kotlin และ Jetpack Compose)
+- `server/main.py` - โค้ด Backend หลัก (FastAPI) จัดการทั้ง AI Model Inference และระบบ API ต่างๆ
+- `update_db.sql` - โค้ด SQL สำหรับสร้างโครงสร้างฐานข้อมูล (มี 6 Table หลัก)
+- `best_ml_model.pkl` - โมเดล AI (Random Forest) ที่ผ่านการเทรนมาแล้วสำหรับทำนายความเสี่ยงดินถล่ม
+- `.gitignore` - ใช้ข้ามการอัปโหลดไฟล์ขนาดใหญ่ เช่น `Landslide_Final_Cleaned_V2.csv` เพื่อไม่ให้รกพื้นที่ใน GitHub
 
 ---
 
-## 🐍 Step 2: Backend Setup (FastAPI)
-The backend requires Python 3.9+ (3.11 recommended). It uses `uvicorn` and `fastapi`.
+## 🛠️ ขั้นตอนที่ 1: การตั้งค่าฐานข้อมูล (Database)
+1. เปิดโปรแกรม **XAMPP Control Panel** และกด Start ทรง **MySQL**
+2. เข้าไปที่ phpMyAdmin (`http://localhost/phpmyadmin`) บนเบราว์เซอร์
+3. กดเมนู New ทางซ้ายเพื่อสร้างฐานข้อมูลใหม่ ชื่อว่า `landsnot_db`
+4. เข้าไปที่แท็บ **Import (นำเข้า)** และอัปโหลดไฟล์ `update_db.sql` เข้าไป เพื่อสร้างตารางทั้งหมดในระบบ (`rain_grids`, `static_nodes`, `users`, `user_pinned_locations`, `prediction_results`, `notifications`)
+5. (แนะนำให้ทำ) เปิด Terminal ในโฟลเดอร์โปรเจค แล้วพิมพ์รันคำสั่ง `python server/seed_data.py` เพื่อเสกข้อมูลพิกัดตั้งต้นลงฐานข้อมูล 
 
-### Option A: Using Conda (Recommended)
+---
+
+## 🐍 ขั้นตอนที่ 2: การเปิดเซิร์ฟเวอร์ระบบ (Backend)
+Backend ถูกพัฒนาด้วย **Python** (ใช้ Uvicorn และ FastAPI) 
+
+### วิธีที่ 1: ใช้ Conda (แนะนำ)
+เปิด **Anaconda Prompt** หรือ Terminal แล้วรันคำสั่งตามลำดับ:
 ```bash
-# Create a new conda environment
+# 1. สร้าง Environment ใหม่ชื่อ landslide (เวอร์ชัน Python 3.11)
 conda create -n landslide python=3.11 -y
 
-# Activate the environment
+# 2. เปิดใช้งาน Environment
 conda activate landslide
 
-# Install required dependencies
+# 3. ติดตั้ง Library พื้นฐานทั้งหมด (FastAPI, scikit-learn, jwt ฯลฯ)
 pip install -r server/requirements.txt
 
-# Start the server (Accessible across network)
-uvicorn server.main:app --host 0.0.0.0 --port 8000
+# 4. เปิดรัน API Server ! (ควรพิมพ์คำสั่งนี้ค้างไว้ตลอดการทำงาน)
+conda run -n landslide python -m uvicorn server.main:app --host 0.0.0.0 --port 8000
 ```
 
-### Option B: Using Standard Python Virtualenv
+### วิธีที่ 2: สร้าง Virtual Environment เองแบบปกติตามสไตล์ Python
 ```bash
-# Create venv
+# 1. สร้าง venv
 python -m venv venv
 
-# Activate (Windows)
-.\venv\Scripts\activate
+# 2. ปลุก Environment
+.\venv\Scripts\activate   # สำหรับ Windows
+source venv/bin/activate # สำหรับ Mac/Linux
 
-# Activate (Mac/Linux)
-source venv/bin/activate
-
-# Install required dependencies
+# 3. ติดตั้ง Libraries
 pip install -r server/requirements.txt
 
-# Start the server
+# 4. เปิดรัน API Server
 python -m uvicorn server.main:app --host 0.0.0.0 --port 8000
 ```
-
-*Note: The backend must be running for the Android app to function!*
+> **หมายเหตุ:** *หากเซิร์ฟเวอร์ยังไม่เปิด แอปในมือถือจะไม่สามารถโหลดข้อมูลแผนที่ได้!*
 
 ---
 
-## 📱 Step 3: Android App Setup
-1. Open **Android Studio**.
-2. Select **Open** and choose the `Landslideproject_cola` folder.
-3. Wait for Gradle sync to complete.
-4. Open the `app/src/main/java/com/example/landslideproject_cola/EarthquakeClient.kt` file.
-5. Change the `BASE_URL`:
-   - If running on **Android Studio Emulator**: Use `http://10.0.2.2:8000/`
-   - If running on a **Real Android Device**: Use your computer's local Wi-Fi IP address (e.g., `http://192.168.1.xxx:8000/`).
-6. Press the **Run** button to install the app on your device/emulator!
+## 📱 ขั้นตอนที่ 3: เปิดแอปพลิเคชัน Android
+1. เปิดโปรแกรม **Android Studio**
+2. เลือกเมนู **Open** และจิ้มไปที่โฟลเดอร์ `Landslideproject_cola` รอจนกว่า Build Gradle และ Sync Libraries จะเสร็จ
+3. ไปที่ไฟล์ `app/src/main/java/com/example/landslideproject_cola/EarthquakeClient.kt`
+4. ตรวจสอบและแก้ไขค่า **`BASE_URL`** ก่อนรัน:
+   - กรณีเปิดด้วย **Android Emulator (จำลองเครื่อง)**: ให้ใช้ `http://10.0.2.2:8000/`
+   - กรณีทดสอบบน **มือถือ Android เครื่องจริง (เสียบสาย USB)**: ให้เปลี่ยนจาก `10.0.2.2` เป็นหมายเลข IP Address เครื่องคอมพิวเตอร์ของคุณแทน (ตัวอย่าง: `http://192.168.1.xxx:8000/`) โดยมือถือและคอมพิวเตอร์จะต้องต่อ Wi-Fi เดียวกัน! 
+5. จากนั้นกดปุ่ม ▶️ **Run** (ปุ่มเพศเล่นสีเขียว) บนตัวแอปพลิเคชันได้เลย!
