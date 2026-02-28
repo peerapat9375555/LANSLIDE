@@ -79,5 +79,10 @@ fun EarthquakeNavGraph(navController: NavHostController) {
         composable(Screen.SetLocation.route) {
             SetLocationScreen(navController, viewModel)
         }
+        // เพิ่มหน้าแสดงรายละเอียดแจ้งเตือนสำหรับ User
+        composable(Screen.UserAlertDetail.route) { backStackEntry ->
+            val logId = backStackEntry.arguments?.getString("logId") ?: ""
+            UserAlertDetailScreen(navController, viewModel, logId)
+        }
     }
 }

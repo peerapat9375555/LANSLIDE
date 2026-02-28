@@ -66,6 +66,7 @@ data class LandslideEvent(
 data class NotificationItem(
     @SerializedName("notification_id") val notification_id: String,
     @SerializedName("user_id") val user_id: String,
+    @SerializedName("log_id") val log_id: String?, // เพิ่ม log_id สำหรับลิ้งค์ไปยังกราฟ
     @SerializedName("title") val title: String,
     @SerializedName("message") val message: String,
     @SerializedName("sent_at") val sent_at: String?,

@@ -90,4 +90,12 @@ sealed class Screen(val route: String, val name: String) {
         route = "set_location_screen",
         name = "ปักหมุดที่อยู่"
     )
+
+    // หน้าแสดงรายละเอียดแจ้งเตือนสำหรับ User (แสดงกราฟ)
+    data object UserAlertDetail : Screen(
+        route = "user_alert_detail/{logId}",
+        name = "รายละเอียดแจ้งเตือน"
+    ) {
+        fun createRoute(logId: String) = "user_alert_detail/$logId"
+    }
 }

@@ -135,7 +135,6 @@ def load_resources():
             conn.close()
 
 def lookup_tambon_district(lat, lon):
-    """Find nearest tambon/district from CSV by lat/lon."""
     if LOCATION_LOOKUP_DF is None or LOCATION_LOOKUP_DF.empty:
         return None, None
     try:
@@ -143,7 +142,8 @@ def lookup_tambon_district(lat, lon):
         dist = ((df['LATITUDE'] - lat)**2 + (df['LONGITUDE'] - lon)**2)
         idx = dist.idxmin()
         return str(df.loc[idx, 'TAMBON']), str(df.loc[idx, 'DISTRICT'])
-    except:
+    except Exception as e:
+        print(f"Lookup Error: {e}")
         return None, None
 
 @app.on_event("startup")
@@ -704,42 +704,85 @@ async def verify_alert(log_id: str, payload: VerifyAlertRequest):
         raise HTTPException(status_code=500, detail="Database connection error")
     try:
         cursor = conn.cursor(dictionary=True)
+        
+        # 1. อัปเดตสถานะการยืนยันของ Admin
         new_status = 'approved' if payload.action.lower() == 'approve' else 'rejected'
         cursor.execute("UPDATE prediction_logs SET status = %s WHERE log_id = %s", (new_status, log_id))
         
         notifications_sent = 0
+        
         if new_status == 'approved':
-            cursor.execute("SELECT node_id, risk_level FROM prediction_logs WHERE log_id = %s", (log_id,))
-            log = cursor.fetchone()
-            if log and log['risk_level'] in ['High', 'Medium']:
-                cursor.execute("SELECT user_id FROM user_pinned_locations WHERE nearest_node_id = %s", (log['node_id'],))
-                pinned_users = cursor.fetchall()
+            # 2. ดึงพิกัดของจุดที่เกิดเหตุ
+            cursor.execute("""
+                SELECT pl.risk_level, sn.latitude, sn.longitude 
+                FROM prediction_logs pl
+                JOIN static_nodes sn ON pl.node_id = sn.node_id
+                WHERE pl.log_id = %s
+            """, (log_id,))
+            alert = cursor.fetchone()
+            
+            if alert:
+                lat_a, lon_a = float(alert['latitude']), float(alert['longitude'])
+                
+                # หาชื่อ ตำบล/อำเภอ จากพิกัด (ใช้ตัวพิมพ์ใหญ่ตาม CSV ของคุณ)
+                tambon, district = lookup_tambon_district(lat_a, lon_a)
+                t_name = tambon if (tambon and tambon != 'None') else "-"
+                d_name = district if (district and district != 'None') else "-"
+
+                title = "⚠️ แจ้งเตือนด่วน: พบความเสี่ยงดินถล่ม"
+                msg = f"พื้นที่ ต.{t_name} อ.{d_name} มีความเสี่ยงระดับ {alert['risk_level']} โปรดเฝ้าระวังในรัศมี 20 กม."
+
+                # 3. ค้นหา User ที่ "ปักหมุด" หรือ "ตัวอยู่ที่นั่น" ในระยะ
+                RADIUS_DEGREE = 0.18  # ≈ 20 km
+
+                query_nearby = f"""
+                    SELECT DISTINCT user_id FROM (
+                        SELECT user_id FROM user_pinned_locations 
+                        WHERE (POW(latitude - %s, 2) + POW(longitude - %s, 2)) < POW({RADIUS_DEGREE}, 2)
+                        
+                        UNION
+                        
+                        SELECT user_id FROM user_locations 
+                        WHERE (POW(latitude - %s, 2) + POW(longitude - %s, 2)) < POW({RADIUS_DEGREE}, 2)
+                    ) AS combined_users
+                """
+                cursor.execute(query_nearby, (lat_a, lon_a, lat_a, lon_a))
+                target_users = cursor.fetchall()
+
+                # 4. เตรียมข้อมูลเพื่อ Insert ลงตาราง notifications
                 notification_inserts = []
-                
-                title = "High Risk Alert" if log['risk_level'] == 'High' else "Medium Risk Notice"
-                msg = f"A {log['risk_level'].lower()} landslide risk has been officially verified near your pinned location."
-                
-                for user_result in pinned_users:
+                for user in target_users:
                     notifications_sent += 1
                     notification_inserts.append((
                         str(uuid.uuid4()), 
-                        user_result['user_id'], 
+                        user['user_id'], 
                         log_id, 
                         title, 
                         msg
                     ))
-                    
+
                 if notification_inserts:
-                    cursor.executemany("INSERT INTO notifications (notification_id, user_id, log_id, title, message) VALUES (%s, %s, %s, %s, %s)", notification_inserts)
-                    
+                    # บันทึกการแจ้งเตือนลง DB พร้อมเวลาปัจจุบัน (NOW())
+                    cursor.executemany(
+                        "INSERT INTO notifications (notification_id, user_id, log_id, title, message, sent_at, is_read) VALUES (%s, %s, %s, %s, %s, NOW(), 0)", 
+                        notification_inserts
+                    )
+        
         conn.commit()
-        return {"status": "success", "message": f"Alert {new_status}", "notifications_sent": notifications_sent}
+        return {
+            "status": "success", 
+            "message": f"เหตุการณ์ถูก {new_status} เรียบร้อยแล้ว", 
+            "notifications_sent": notifications_sent
+        }
+        
     except Exception as e:
-        conn.rollback()
+        if conn: conn.rollback()
+        print(f"[ERROR] verify_alert: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        cursor.close()
-        conn.close()
+        if conn:
+            cursor.close()
+            conn.close()
 
 # =============================================================
 # GEOCODE LOCATION - หา TAMBON/DISTRICT จาก lat/lon (ใช้ CSV)
