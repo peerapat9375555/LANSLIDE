@@ -12,30 +12,21 @@
 
 ---
 
-## 📝 สิ่งที่อัพเดตล่าสุด (Phase 5: Admin/User แยกหน้าจอ)
+## 📝 สิ่งที่อัพเดตล่าสุด (Phase 6: ML Model Fix & Threshold Calibration)
+
+### ML Pipeline (`retrain_model.py`)
+- **แก้ StandardScaler**: ตอนนี้ fit บน **original data (2,104 samples)** ก่อน balance — ป้องกัน mean/std เพี้ยนที่ทำให้ predict Medium/High สูงเกินจริง
+- เพิ่ม feature `Rain_10D_Prior` และ `Rain10D_x_Slope` (สะสมน้ำฝน 10 วัน × slope)
+- เพิ่ม **Probability Distribution Analysis** — แสดงสถิติหลังเทรนเพื่อ calibrate threshold
+- เพิ่ม **Threshold Simulation** — เปรียบเทียบ threshold 4 คู่ เลือกที่ balance false alert / recall ดีที่สุด
+- รองรับ optional: `xgboost`, `lightgbm`, `catboost` (ถ้า install แล้วจะเทรนเทียบด้วย)
 
 ### Backend (`server/main.py`)
-- เพิ่ม `lookup_tambon_district()` — หาตำบล/อำเภอจาก `nan_province_data.csv` ตาม lat/lon
-- เพิ่ม API: `GET /api/admin/alerts/history`, `POST /api/emergency` (เพิ่มเบอร์)
-- เพิ่ม API: `POST /trigger-gee` (ดึง GEE features จริง + update DB), `POST /trigger-rain` (ดึงน้ำฝน + ML predict)
-- แก้ max_allowed_packet error → batch insert ทีละ 200 แถว
-- auto-cleanup duplicate nodes ตอนกด trigger-gee
-
-### Android — Admin แยกออกจาก User ทุกหน้า
-- `AdminComponents.kt` — BottomNav 3 tab + Drawer + TopBar สีแดง
-- `AdminHomeScreen.kt` — Dashboard + กราฟน้ำฝน + 23 ML features + ตำบล/อำเภอ
-- `AdminAlertsScreen.kt` — รายชื่อเหตุรอยืนยัน + ตำบล/อำเภอ
-- `AdminVerifyScreen.kt` — Dashboard + ปุ่มยืนยัน/ไม่ยืนยัน
-- `AdminMapScreen.kt` — แผนที่ risk zone
-- `AdminEmergencyScreen.kt` — แก้ไข/เพิ่มเบอร์ฉุกเฉิน (ปุ่ม FAB +)
-- `AdminAnalysisScreen.kt` — แยก 2 ปุ่ม: ดึง GEE / ดึงน้ำฝน+Predict
-- `AdminNotificationHistoryScreen.kt` — ประวัติแจ้งเตือนที่เคยส่ง
-- `EmergencyScreen.kt` — ลบปุ่ม Edit (user ดูอย่างเดียว)
-- `LoginScreen.kt` — Admin login → AdminHome
-
-### Data Pipeline
-- `gee_extractor.py` — แก้ GRIP4 Roads dataset (unavailable) → ใช้ค่าคงที่แทน
-- `requirements.txt` — เพิ่ม `earthengine-api`, `python-dotenv`
+- ปรับ Risk Threshold ตามผลวิเคราะห์ probability distribution:
+  - **Low**: prob < 0.50 (ไม่แจ้งเตือน)
+  - **Medium**: prob 0.50–0.84
+  - **High**: prob ≥ 0.85
+- ผลลัพธ์: ลด false alert ~57% ขณะที่ recall ยังอยู่ที่ **96.74%**
 
 ---
 
@@ -175,10 +166,23 @@ python -c "import uvicorn; uvicorn.run('main:app', host='0.0.0.0', port=8000, re
 | mysql-connector-python | 9.0.0 | เชื่อมต่อ MySQL |
 | pandas | 2.2.2 | จัดการ DataFrame |
 | numpy | 1.26.4 | คำนวณตัวเลข |
-| scikit-learn | 1.5.1 | ML Model |
-| joblib | 1.4.2 | โหลด model/scaler |
+| scikit-learn | 1.5.1 | ML Model (Random Forest, Gradient Boosting ฯลฯ) |
+| joblib | 1.4.2 | โหลด/บันทึก model และ scaler |
 | httpx | 0.27.0 | HTTP Client (Open-Meteo) |
 | bcrypt | 4.2.0 | Hash รหัสผ่าน |
 | PyJWT | 2.9.0 | JSON Web Token |
 | earthengine-api | 1.7.15 | Google Earth Engine |
 | python-dotenv | 1.2.1 | อ่าน .env |
+
+**Optional (สำหรับ retrain_model.py เพื่อเทียบโมเดลเพิ่มเติม):**
+
+| Library | หน้าที่ |
+|---------|----------|
+| xgboost | XGBoost Classifier |
+| lightgbm | LightGBM Classifier |
+| catboost | CatBoost Classifier |
+
+ติดตั้ง optional packages:
+```bash
+pip install xgboost lightgbm catboost
+```

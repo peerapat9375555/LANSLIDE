@@ -299,10 +299,10 @@ async def trigger_prediction():
         
         risk = "Low"
         color = "#00FF00"
-        if prob >= 0.70:
+        if prob >= 0.85:
             risk = "High"
             color = "#FF0000"
-        elif prob >= 0.35:
+        elif prob >= 0.50:
             risk = "Medium"
             color = "#FFFF00"
             
