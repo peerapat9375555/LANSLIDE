@@ -26,7 +26,7 @@ fun AdminAlertsScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
-    val alerts = viewModel.pendingAlerts
+    val alerts = viewModel.pendingAlerts.sortedByDescending { it.probability }
     val isLoading = viewModel.isLoading
 
     LaunchedEffect(Unit) {
