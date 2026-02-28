@@ -84,21 +84,27 @@ GEE_PROJECT_ID=your-gee-project-id-here
 
 ### ขั้นตอนที่ 3: ตั้งค่า Python Environment
 
+> ✅ ใช้ **Python venv** (ไม่ต้องติดตั้ง Anaconda)
+> ต้องมี **Python 3.11** ติดตั้งไว้ในเครื่องก่อน → [ดาวน์โหลดที่นี่](https://www.python.org/downloads/release/python-3119/)
+
 ```bash
-# 1. สร้าง Conda Environment (Python 3.11)
-conda create -n landslide python=3.11 -y
+# 1. เข้าโฟลเดอร์ server
+cd server
 
-# 2. เปิดใช้งาน
-conda activate landslide
+# 2. สร้าง virtual environment
+python -m venv venv
 
-# 3. ติดตั้ง dependencies ทั้งหมด
-pip install -r server/requirements.txt
+# 3. เปิดใช้งาน (Windows CMD)
+venv\Scripts\activate
 
-# 4. Authenticate Google Earth Engine (ครั้งแรกครั้งเดียว)
+# 4. ติดตั้ง dependencies ทั้งหมด
+pip install -r requirements.txt
+
+# 5. Authenticate Google Earth Engine (ครั้งแรกครั้งเดียว)
 python -c "import ee; ee.Authenticate()"
 # → จะเปิดหน้าเว็บ login Google แล้ว copy token กลับมาวาง
 
-# 5. ทดสอบว่า GEE ทำงานได้
+# 6. ทดสอบว่า GEE ทำงานได้
 python -c "import ee; ee.Initialize(project='YOUR_PROJECT_ID'); print('GEE OK!')"
 ```
 
@@ -125,10 +131,18 @@ python server/seed_data.py
 ### ขั้นตอนที่ 5: เปิดเซิร์ฟเวอร์ Backend
 
 ```bash
-# เข้าไปที่โฟลเดอร์ server แล้วรัน
-cd server
-python -c "import uvicorn; uvicorn.run('main:app', host='0.0.0.0', port=8000, reload=True)"
+# เปิดใช้งาน venv (ถ้ายังไม่ได้ activate)
+venv\Scripts\activate
+
+# รันเซิร์ฟเวอร์
+uvicorn main:app --reload
 ```
+
+> 💡 **ครั้งต่อไปที่จะรัน** แค่เปิด CMD ใน `server/` แล้วรัน 2 คำสั่งนี้:
+> ```
+> venv\Scripts\activate
+> uvicorn main:app --reload
+> ```
 
 เมื่อเซิร์ฟเวอร์ขึ้น `Application startup complete.` แสดงว่าพร้อมใช้งาน
 
@@ -166,7 +180,7 @@ python -c "import uvicorn; uvicorn.run('main:app', host='0.0.0.0', port=8000, re
 | mysql-connector-python | 9.0.0 | เชื่อมต่อ MySQL |
 | pandas | 2.2.2 | จัดการ DataFrame |
 | numpy | 1.26.4 | คำนวณตัวเลข |
-| scikit-learn | 1.5.1 | ML Model (Random Forest, Gradient Boosting ฯลฯ) |
+| scikit-learn | 1.8.0 | ML Model (Random Forest, Gradient Boosting ฯลฯ) |
 | joblib | 1.4.2 | โหลด/บันทึก model และ scaler |
 | httpx | 0.27.0 | HTTP Client (Open-Meteo) |
 | bcrypt | 4.2.0 | Hash รหัสผ่าน |
