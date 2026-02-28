@@ -105,7 +105,18 @@ data class VerifyAlertRequest(
 
 data class UpdateEmergencyRequest(
     @SerializedName("service_name") val service_name: String,
-    @SerializedName("phone_number") val phone_number: String
+    @SerializedName("phone_number") val phone_number: String,
+    @SerializedName("img_url") val img_url: String? = null
+)
+
+data class UploadImageRequest(
+    @SerializedName("image_base64") val image_base64: String,
+    @SerializedName("filename") val filename: String
+)
+
+data class UploadImageResponse(
+    @SerializedName("status") val status: String,
+    @SerializedName("img_url") val img_url: String?
 )
 
 data class PendingAlert(

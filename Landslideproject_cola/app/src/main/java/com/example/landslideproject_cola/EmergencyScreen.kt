@@ -14,12 +14,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
 @Composable
@@ -56,12 +59,20 @@ fun EmergencyScreen(
             )
 
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (services.isEmpty()) {
                     items(defaultServices) { (name, phone, district) ->
-                        EmergencyContactCard(name = name, phone = phone, subtitle = district) {
+                        EmergencyContactCard(
+                            name = name,
+                            phone = phone,
+                            subtitle = district,
+                            imgUrl = null
+                        ) {
                             val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
                             context.startActivity(intent)
                         }
@@ -71,7 +82,8 @@ fun EmergencyScreen(
                         EmergencyContactCard(
                             name = s.service_name,
                             phone = s.phone_number,
-                            subtitle = s.district ?: ""
+                            subtitle = s.district ?: "",
+                            imgUrl = s.img_url
                         ) {
                             val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${s.phone_number}"))
                             context.startActivity(intent)
@@ -84,7 +96,15 @@ fun EmergencyScreen(
 }
 
 @Composable
-fun EmergencyContactCard(name: String, phone: String, subtitle: String, onCall: () -> Unit) {
+fun EmergencyContactCard(
+    name: String,
+    phone: String,
+    subtitle: String,
+    imgUrl: String?,
+    onCall: () -> Unit
+) {
+    val baseUrl = EarthquakeClient.BASE_URL
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -92,22 +112,48 @@ fun EmergencyContactCard(name: String, phone: String, subtitle: String, onCall: 
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // ---- Icon / Image ----
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .background(AppRed.copy(alpha = 0.1f), CircleShape),
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(AppRed.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Phone, null, tint = AppRed, modifier = Modifier.size(22.dp))
+                val hasImage = !imgUrl.isNullOrBlank()
+                if (hasImage) {
+                    val fullUrl = if (imgUrl!!.startsWith("http")) imgUrl
+                                  else "$baseUrl${imgUrl.trimStart('/')}"
+                    AsyncImage(
+                        model = fullUrl,
+                        contentDescription = "รูป$name",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Phone,
+                        contentDescription = null,
+                        tint = AppRed,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
+
             Spacer(modifier = Modifier.width(14.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AppTextDark)
-                Text(subtitle, fontSize = 12.sp, color = AppTextGrey)
+                if (subtitle.isNotBlank()) {
+                    Text(subtitle, fontSize = 12.sp, color = AppTextGrey)
+                }
             }
+
             Button(
                 onClick = onCall,
                 shape = RoundedCornerShape(8.dp),

@@ -352,6 +352,48 @@ class EarthquakeViewModel : ViewModel() {
         }
     }
 
+    // ================= ADMIN: DELETE EMERGENCY SERVICE =================
+    fun deleteEmergencyService(context: Context, serviceId: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            isLoading = true
+            try {
+                val response = EarthquakeClient.earthquakeAPI.deleteEmergencyService(serviceId)
+                if (response.isSuccessful) {
+                    Toast.makeText(context, "ลบรายการสำเร็จ", Toast.LENGTH_SHORT).show()
+                    onSuccess()
+                } else {
+                    Toast.makeText(context, "ลบรายการไม่สำเร็จ", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    // ================= ADMIN: UPLOAD EMERGENCY IMAGE =================
+    fun uploadEmergencyImage(context: Context, serviceId: String, imageBase64: String, filename: String, onSuccess: (String) -> Unit) {
+        viewModelScope.launch {
+            isLoading = true
+            try {
+                val request = UploadImageRequest(imageBase64, filename)
+                val response = EarthquakeClient.earthquakeAPI.uploadEmergencyImage(serviceId, request)
+                if (response.isSuccessful && response.body()?.img_url != null) {
+                    val imgUrl = response.body()!!.img_url!!
+                    Toast.makeText(context, "อัปโหลดรูปสำเร็จ", Toast.LENGTH_SHORT).show()
+                    onSuccess(imgUrl)
+                } else {
+                    Toast.makeText(context, "อัปโหลดรูปไม่สำเร็จ", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
     // ================= USER PINS: GET PINS =================
     fun getUserPins(userId: String) {
         viewModelScope.launch {

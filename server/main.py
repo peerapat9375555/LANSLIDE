@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
@@ -11,12 +12,23 @@ import datetime
 import math
 from typing import List, Optional
 import os
+import shutil
+import base64
 import mysql.connector
 import uuid
 import bcrypt
 import jwt as pyjwt
 
 app = FastAPI()
+
+# Serve uploaded files (requires aiofiles package)
+try:
+    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
+    os.makedirs(uploads_dir, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+    print("[OK] Static file serving enabled at /uploads")
+except Exception as _e:
+    print(f"[WARN] Static file serving disabled: {_e}")
 
 # CORS — อนุญาตทุก origin (สำหรับ dev)
 app.add_middleware(
@@ -64,6 +76,11 @@ class VerifyAlertRequest(BaseModel):
 class UpdateEmergencyRequest(BaseModel):
     service_name: str
     phone_number: str
+    img_url: Optional[str] = None
+
+class UploadImageRequest(BaseModel):
+    image_base64: str  # base64-encoded image data
+    filename: str
 
 class LoginRequest(BaseModel):
     email: str
@@ -728,14 +745,22 @@ async def verify_alert(log_id: str, payload: VerifyAlertRequest):
 # ADMIN: UPDATE EMERGENCY SERVICE
 # =============================================================
 @app.put("/api/emergency/{service_id}")
-async def update_emergency(service_id: int, payload: UpdateEmergencyRequest):
+async def update_emergency(service_id: str, payload: UpdateEmergencyRequest):
     conn = get_db_connection()
     if not conn:
         raise HTTPException(status_code=500, detail="Database connection error")
     try:
         cursor = conn.cursor()
-        cursor.execute("UPDATE emergency_services SET service_name = %s, phone_number = %s WHERE service_id = %s", 
-                      (payload.service_name, payload.phone_number, service_id))
+        if payload.img_url is not None:
+            cursor.execute(
+                "UPDATE emergency_services SET service_name = %s, phone_number = %s, img_url = %s WHERE service_id = %s",
+                (payload.service_name, payload.phone_number, payload.img_url, service_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE emergency_services SET service_name = %s, phone_number = %s WHERE service_id = %s",
+                (payload.service_name, payload.phone_number, service_id)
+            )
         conn.commit()
         return {"status": "success", "message": "Emergency contact updated."}
     except Exception as e:
@@ -755,10 +780,92 @@ async def add_emergency_service(payload: UpdateEmergencyRequest):
         raise HTTPException(status_code=500, detail="Database connection error")
     try:
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO emergency_services (service_name, phone_number) VALUES (%s, %s)", 
-                      (payload.service_name, payload.phone_number))
+        # Insert without img_url first; image uploaded separately via /image endpoint
+        service_id = str(uuid.uuid4())
+        cursor.execute(
+            "INSERT INTO emergency_services (service_id, service_name, phone_number) VALUES (%s, %s, %s)",
+            (service_id, payload.service_name, payload.phone_number)
+        )
         conn.commit()
-        return {"status": "success", "message": "Emergency contact added."}
+        return {"status": "success", "message": "Emergency contact added.", "service_id": service_id}
+    except Exception as e:
+        conn.rollback()
+        print(f"[ERROR] add_emergency_service: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# ADMIN: DELETE EMERGENCY SERVICE
+# =============================================================
+@app.delete("/api/emergency/{service_id}")
+async def delete_emergency_service(service_id: str):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        # Get img_url to delete file if exists
+        cursor.execute("SELECT img_url FROM emergency_services WHERE service_id = %s", (service_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Emergency service not found")
+        
+        # Delete image file if it's a local file path
+        if row.get('img_url') and row['img_url'].startswith('/uploads/'):
+            file_path = os.path.join(PROJECT_ROOT, row['img_url'].lstrip('/'))
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        
+        cursor.execute("DELETE FROM emergency_services WHERE service_id = %s", (service_id,))
+        conn.commit()
+        return {"status": "success", "message": "Emergency contact deleted.", "deleted": cursor.rowcount}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# ADMIN: UPLOAD IMAGE FOR EMERGENCY SERVICE (base64)
+# =============================================================
+@app.post("/api/emergency/{service_id}/image")
+async def upload_emergency_image(service_id: str, payload: UploadImageRequest):
+    """Receive base64 image, save to disk, update img_url in DB."""
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        # Decode base64
+        try:
+            img_data = base64.b64decode(payload.image_base64)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid base64 image data")
+        
+        # Ensure uploads directory exists
+        uploads_dir = os.path.join(PROJECT_ROOT, 'uploads', 'emergency')
+        os.makedirs(uploads_dir, exist_ok=True)
+        
+        # Sanitize filename
+        safe_name = f"{service_id}_{uuid.uuid4().hex[:8]}_{payload.filename}"
+        file_path = os.path.join(uploads_dir, safe_name)
+        
+        with open(file_path, 'wb') as f:
+            f.write(img_data)
+        
+        img_url = f"/uploads/emergency/{safe_name}"
+        
+        cursor = conn.cursor()
+        cursor.execute("UPDATE emergency_services SET img_url = %s WHERE service_id = %s", (img_url, service_id))
+        conn.commit()
+        
+        return {"status": "success", "img_url": img_url}
+    except HTTPException:
+        raise
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))

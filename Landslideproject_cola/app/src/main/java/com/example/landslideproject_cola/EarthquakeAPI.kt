@@ -61,6 +61,12 @@ interface EarthquakeAPI {
     @POST("api/emergency")
     suspend fun addEmergencyService(@Body data: UpdateEmergencyRequest): Response<GenericResponse>
 
+    @DELETE("api/emergency/{service_id}")
+    suspend fun deleteEmergencyService(@Path("service_id") serviceId: String): Response<GenericResponse>
+
+    @POST("api/emergency/{service_id}/image")
+    suspend fun uploadEmergencyImage(@Path("service_id") serviceId: String, @Body data: UploadImageRequest): Response<UploadImageResponse>
+
     @GET("api/admin/alerts/history")
     suspend fun getAlertHistory(): Response<List<PendingAlert>>
 
