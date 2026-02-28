@@ -138,7 +138,7 @@ fun RainfallCard() {
     }
 }
 
-// ====== Green Top Bar (TopAppBar handles status bar insets automatically) ======
+// ====== Red Top Bar (เหมือน Admin) ======
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GreenTopBar(title: String, onMenuClick: () -> Unit) {
@@ -148,7 +148,7 @@ fun GreenTopBar(title: String, onMenuClick: () -> Unit) {
                 text = title,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = AppTextDark
+                color = Color.White
             )
         },
         navigationIcon = {
@@ -156,13 +156,13 @@ fun GreenTopBar(title: String, onMenuClick: () -> Unit) {
                 Icon(
                     Icons.Default.Menu,
                     contentDescription = "เมนู",
-                    tint = AppGreenDark,
+                    tint = Color.White,
                     modifier = Modifier.size(28.dp)
                 )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = AppWhite
+            containerColor = AppRed
         )
     )
 }
@@ -248,7 +248,7 @@ fun AppBottomNav(navController: NavHostController) {
             onClick = { navController.navigate(Screen.Home.route) { launchSingleTop = true } },
             icon = { Icon(Icons.Default.Home, null) },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = AppGreen,
+                selectedIconColor = AppRed,
                 unselectedIconColor = AppTextGrey,
                 indicatorColor = Color.Transparent
             )
@@ -258,7 +258,7 @@ fun AppBottomNav(navController: NavHostController) {
             onClick = { navController.navigate(Screen.Predictions.route) { launchSingleTop = true } },
             icon = { Icon(Icons.Default.LocationOn, null) },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = AppGreen,
+                selectedIconColor = AppRed,
                 unselectedIconColor = AppTextGrey,
                 indicatorColor = Color.Transparent
             )
@@ -268,7 +268,7 @@ fun AppBottomNav(navController: NavHostController) {
             onClick = { navController.navigate(Screen.Notifications.route) { launchSingleTop = true } },
             icon = { Icon(Icons.Default.Notifications, null) },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = AppGreen,
+                selectedIconColor = AppRed,
                 unselectedIconColor = AppTextGrey,
                 indicatorColor = Color.Transparent
             )

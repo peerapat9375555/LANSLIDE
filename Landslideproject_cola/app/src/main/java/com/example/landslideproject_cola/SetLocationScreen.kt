@@ -54,21 +54,27 @@ fun SetLocationScreen(
     var centerLat by remember { mutableDoubleStateOf(18.7833) }
     var centerLon by remember { mutableDoubleStateOf(100.7833) }
     var locationName by remember { mutableStateOf("กำลังโหลดตำแหน่ง...") }
-    var districtName by remember { mutableStateOf("") }
+    var districtName by remember { mutableStateOf("") }   // อำเภอ → DISTRICT
+    var tambonName   by remember { mutableStateOf("") }   // ตำบล  → TAMBON
     var isSaving by remember { mutableStateOf(false) }
     var isGeocoding by remember { mutableStateOf(false) }
     var saveSuccess by remember { mutableStateOf<Boolean?>(null) }
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
-    // Reverse geocode + debounce 1500ms (Nominatim ต้องการ max 1 req/sec)
+    // Reverse geocode + debounce 1500ms
     LaunchedEffect(centerLat, centerLon) {
         isGeocoding = true
         locationName = "กำลังค้นหาตำแหน่ง..."
-        // รอ 1500ms — ถ้าแผนที่ยังเลื่อนอยู่จะถูก cancel อัตโนมัติ
         kotlinx.coroutines.delay(1500)
-        val (name, district) = reverseGeocode(centerLat, centerLon)
-        locationName = name
+
+        // 1) ชื่อสถานที่ จาก Photon
+        locationName = reverseGeocode(centerLat, centerLon)
+
+        // 2) ตำบล/อำเภอ จาก Server (CSV lookup — แม่นยำกว่า)
+        val (tambon, district) = fetchTambonDistrict(centerLat, centerLon)
+        tambonName   = tambon
         districtName = district
+
         isGeocoding = false
     }
 
@@ -212,9 +218,19 @@ fun SetLocationScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    // อำเภอ
                     if (districtName.isNotBlank()) {
                         Text(
-                            text = districtName,
+                            text = "อำเภอ $districtName",
+                            fontSize = 13.sp,
+                            color = AppTextGrey,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    // ตำบล
+                    if (tambonName.isNotBlank()) {
+                        Text(
+                            text = "ตำบล $tambonName",
                             fontSize = 13.sp,
                             color = AppTextGrey,
                             textAlign = TextAlign.Center
@@ -250,7 +266,8 @@ fun SetLocationScreen(
                                     latitude = centerLat,
                                     longitude = centerLon,
                                     location_name = locationName,
-                                    district = districtName
+                                    district = districtName,   // อำเภอ → DISTRICT
+                                    tambon   = tambonName      // ตำบล  → TAMBON
                                 )
                                 viewModel.saveUserLocation(context, userId, req) { ok ->
                                     isSaving = false
@@ -290,59 +307,57 @@ private val geocodeClient by lazy {
         .build()
 }
 
-// ===== Reverse geocoding ด้วย Photon (komoot) — ฟรี ไม่ต้อง API key =====
-// Response เป็น GeoJSON: features[0].properties มี name, district, city, state, street
-suspend fun reverseGeocode(lat: Double, lon: Double): Pair<String, String> = withContext(Dispatchers.IO) {
+// ===== Reverse geocoding ด้วย Photon — ใช้แค่หาชื่อสถานที่ (location_name) =====
+suspend fun reverseGeocode(lat: Double, lon: Double): String = withContext(Dispatchers.IO) {
     return@withContext try {
-        // Photon API: lon ก่อน lat
         val url = "https://photon.komoot.io/reverse?lon=$lon&lat=$lat&limit=1&lang=default"
-
         val request = okhttp3.Request.Builder()
             .url(url)
             .header("User-Agent", "LandslideNanApp/1.0")
             .build()
-
         val response = geocodeClient.newCall(request).execute()
         val body = response.body?.string() ?: ""
-
         android.util.Log.d("GEOCODE", "Photon HTTP ${response.code}: $body")
+        if (!response.isSuccessful || body.isBlank()) return@withContext "ไม่ทราบชื่อสถานที่"
 
-        if (!response.isSuccessful || body.isBlank()) {
-            return@withContext Pair("ไม่ทราบชื่อสถานที่", "")
-        }
-
-        val json       = org.json.JSONObject(body)
-        val features   = json.optJSONArray("features")
-        val props      = features?.optJSONObject(0)?.optJSONObject("properties")
-
-        // Photon properties:
-        // name      → ชื่อ POI เช่น "Nan Boutique Hotel"
-        // street    → ชื่อถนน
-        // district  → ตำบล/แขวง (suburb level)
-        // city      → อำเภอ/เมือง
-        // state     → จังหวัด
-        // country   → ประเทศ
-        val name     = props?.optString("name")?.takeIf     { it.isNotBlank() && it != "null" }
-        val street   = props?.optString("street")?.takeIf   { it.isNotBlank() && it != "null" }
-        val district = props?.optString("district")?.takeIf { it.isNotBlank() && it != "null" }
-                    ?: props?.optString("suburb")?.takeIf   { it.isNotBlank() && it != "null" }
-                    ?: props?.optString("city")?.takeIf     { it.isNotBlank() && it != "null" }
-        val city     = props?.optString("city")?.takeIf     { it.isNotBlank() && it != "null" }
-        val state    = props?.optString("state")?.takeIf    { it.isNotBlank() && it != "null" }
-
-        // ชื่อสถานที่: POI > ถนน > เมือง > จังหวัด
-        val locationName = name ?: street ?: city ?: state ?: "ไม่ทราบชื่อสถานที่"
-
-        // district (ตำบล): district > city > state
-        val districtResult = district ?: city ?: state ?: ""
-
-        android.util.Log.d("GEOCODE", "name=$locationName  district=$districtResult")
-        Pair(locationName, districtResult)
-
+        val props = org.json.JSONObject(body)
+            .optJSONArray("features")?.optJSONObject(0)?.optJSONObject("properties")
+        val name   = props?.optString("name")?.takeIf   { it.isNotBlank() && it != "null" }
+        val street = props?.optString("street")?.takeIf { it.isNotBlank() && it != "null" }
+        val city   = props?.optString("city")?.takeIf   { it.isNotBlank() && it != "null" }
+        val state  = props?.optString("state")?.takeIf  { it.isNotBlank() && it != "null" }
+        name ?: street ?: city ?: state ?: "ไม่ทราบชื่อสถานที่"
     } catch (e: kotlinx.coroutines.CancellationException) {
         throw e
     } catch (e: Exception) {
-        android.util.Log.e("GEOCODE", "${e.javaClass.simpleName}: ${e.message}", e)
-        Pair("ไม่สามารถระบุชื่อสถานที่ได้", "")
+        android.util.Log.e("GEOCODE", "Photon error: ${e.message}")
+        "ไม่สามารถระบุชื่อสถานที่ได้"
+    }
+}
+
+// ===== Fetch TAMBON + DISTRICT จาก Server (nan_province_data.csv nearest lookup) =====
+// return Pair(ตำบล, อำเภอ)
+suspend fun fetchTambonDistrict(lat: Double, lon: Double): Pair<String, String> = withContext(Dispatchers.IO) {
+    return@withContext try {
+        val url = "${EarthquakeClient.BASE_URL}api/geocode-location?lat=$lat&lon=$lon"
+        val request = okhttp3.Request.Builder()
+            .url(url)
+            .header("User-Agent", "LandslideNanApp/1.0")
+            .build()
+        val response = geocodeClient.newCall(request).execute()
+        val body = response.body?.string() ?: ""
+        android.util.Log.d("GEOCODE", "Server geocode: $body")
+        if (!response.isSuccessful || body.isBlank()) return@withContext Pair("", "")
+
+        val json     = org.json.JSONObject(body)
+        val tambon   = json.optString("tambon", "")
+        val district = json.optString("district", "")
+        android.util.Log.d("GEOCODE", "tambon=$tambon  district=$district")
+        Pair(tambon, district)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        android.util.Log.e("GEOCODE", "Server geocode error: ${e.message}")
+        Pair("", "")
     }
 }

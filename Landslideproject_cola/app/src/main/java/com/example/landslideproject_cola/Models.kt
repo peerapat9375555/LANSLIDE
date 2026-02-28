@@ -171,7 +171,8 @@ data class SaveLocationRequest(
     @SerializedName("latitude") val latitude: Double,
     @SerializedName("longitude") val longitude: Double,
     @SerializedName("location_name") val location_name: String?,
-    @SerializedName("district") val district: String?
+    @SerializedName("district") val district: String?,   // อำเภอ
+    @SerializedName("tambon") val tambon: String?         // ตำบล
 )
 
 data class UserLocationData(
@@ -180,7 +181,8 @@ data class UserLocationData(
     @SerializedName("latitude") val latitude: Double?,
     @SerializedName("longitude") val longitude: Double?,
     @SerializedName("location_name") val location_name: String?,
-    @SerializedName("district") val district: String?,
+    @SerializedName("district") val district: String?,   // อำเภอ
+    @SerializedName("tambon") val tambon: String?,        // ตำบล
     @SerializedName("updated_at") val updated_at: String?
 )
 

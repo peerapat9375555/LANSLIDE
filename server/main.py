@@ -742,13 +742,26 @@ async def verify_alert(log_id: str, payload: VerifyAlertRequest):
         conn.close()
 
 # =============================================================
+# GEOCODE LOCATION - หา TAMBON/DISTRICT จาก lat/lon (ใช้ CSV)
+# =============================================================
+@app.get("/api/geocode-location")
+async def geocode_location(lat: float, lon: float):
+    """ค้นหา TAMBON และ DISTRICT ที่ใกล้ที่สุดจาก nan_province_data.csv"""
+    tambon, district = lookup_tambon_district(lat, lon)
+    return {
+        "tambon": tambon or "",
+        "district": district or ""
+    }
+
+# =============================================================
 # USER LOCATION - บันทึก/อัปเดตตำแหน่งของ user
 # =============================================================
 class SaveLocationRequest(BaseModel):
     latitude: float
     longitude: float
     location_name: Optional[str] = None
-    district: Optional[str] = None
+    tambon: Optional[str] = None      # ตำบล
+    district: Optional[str] = None    # อำเภอ
 
 @app.post("/api/user-location/{user_id}")
 async def save_user_location(user_id: str, payload: SaveLocationRequest):
@@ -761,14 +774,14 @@ async def save_user_location(user_id: str, payload: SaveLocationRequest):
         existing = cursor.fetchone()
         if existing:
             cursor.execute(
-                "UPDATE user_locations SET latitude=%s, longitude=%s, location_name=%s, district=%s, updated_at=NOW() WHERE user_id=%s",
-                (payload.latitude, payload.longitude, payload.location_name, payload.district, user_id)
+                "UPDATE user_locations SET latitude=%s, longitude=%s, location_name=%s, tambon=%s, district=%s, updated_at=NOW() WHERE user_id=%s",
+                (payload.latitude, payload.longitude, payload.location_name, payload.tambon, payload.district, user_id)
             )
         else:
             location_id = str(uuid.uuid4())
             cursor.execute(
-                "INSERT INTO user_locations (location_id, user_id, latitude, longitude, location_name, district, updated_at) VALUES (%s, %s, %s, %s, %s, %s, NOW())",
-                (location_id, user_id, payload.latitude, payload.longitude, payload.location_name, payload.district)
+                "INSERT INTO user_locations (location_id, user_id, latitude, longitude, location_name, tambon, district, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())",
+                (location_id, user_id, payload.latitude, payload.longitude, payload.location_name, payload.tambon, payload.district)
             )
         conn.commit()
         return {"status": "success", "message": "Location saved."}

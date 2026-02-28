@@ -5,6 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +31,7 @@ import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon as OsmPolygon
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PredictionsScreen(
     navController: NavHostController,
@@ -36,9 +41,13 @@ fun PredictionsScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val sharedPref = remember { SharedPreferencesManager(context) }
-    
+
+    // MapView reference for zoom/location control
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
+
+    val initialPos = GeoPoint(18.783, 100.783)
+
     LaunchedEffect(Unit) {
-        // Init OSMdroid config
         Configuration.getInstance().load(context, android.preference.PreferenceManager.getDefaultSharedPreferences(context))
         viewModel.getPredictions()
         val userId = sharedPref.getSavedUserId()
@@ -46,9 +55,6 @@ fun PredictionsScreen(
             viewModel.getUserPins(userId)
         }
     }
-
-    // Default to Nan Province roughly
-    val initialPos = GeoPoint(18.783, 100.783)
 
     // Dialog state for Pinning
     var showPinDialog by remember { mutableStateOf(false) }
@@ -63,7 +69,27 @@ fun PredictionsScreen(
     ) {
         Scaffold(
             topBar = {
-                GreenTopBar(title = "Map Risk Zone") { scope.launch { drawerState.open() } }
+                // ===== Red Top Bar เหมือน Admin =====
+                TopAppBar(
+                    title = {
+                        Text(
+                            "แผนที่ความเสี่ยงดินถล่ม",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = "เมนู",
+                                tint = Color.White
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = AppRed)
+                )
             },
             bottomBar = { AppBottomNav(navController) },
             containerColor = Color.White
@@ -71,9 +97,9 @@ fun PredictionsScreen(
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding)
             ) {
-                // Background map using OSMdroid
                 val predictions = viewModel.predictions
 
+                // ===== OSM MAP =====
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { ctx ->
@@ -84,27 +110,23 @@ fun PredictionsScreen(
                             setMultiTouchControls(true)
                             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
 
-                            // Setup Long Press Receiver
                             val mReceive: MapEventsReceiver = object : MapEventsReceiver {
-                                override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
-                                    return false
-                                }
-
+                                override fun singleTapConfirmedHelper(p: GeoPoint): Boolean = false
                                 override fun longPressHelper(p: GeoPoint): Boolean {
-                                    if(viewModel.loginResult?.user_id != null) {
-                                       selectedLatLng = p
-                                       showPinDialog = true
+                                    if (viewModel.loginResult?.user_id != null) {
+                                        selectedLatLng = p
+                                        showPinDialog = true
                                     } else {
-                                       Toast.makeText(context, "กรุณาล็อกอินเพื่อปักหมุดพื้นที่ส่วนตัว", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(ctx, "กรุณาล็อกอินเพื่อปักหมุดพื้นที่ส่วนตัว", Toast.LENGTH_SHORT).show()
                                     }
                                     return true
                                 }
                             }
                             overlays.add(MapEventsOverlay(mReceive))
+                            mapViewRef = this
                         }
                     },
                     update = { view ->
-                        // Clear existing overlays but keep the EventReceiver
                         val eventsOverlay = view.overlays.find { it is MapEventsOverlay }
                         view.overlays.clear()
                         if (eventsOverlay != null) view.overlays.add(eventsOverlay)
@@ -112,12 +134,10 @@ fun PredictionsScreen(
                         // Draw Risk Polygons
                         predictions.forEach { item ->
                             val polyPoints = item.polygon.map { GeoPoint(it[0], it[1]) }
-                            
                             val fillColorHex = try {
                                 android.graphics.Color.parseColor(item.color)
                             } catch (e: Exception) { android.graphics.Color.GRAY }
-
-                            val transparentFill = fillColorHex and 0x55FFFFFF // ~33% opacity
+                            val transparentFill = fillColorHex and 0x55FFFFFF
 
                             val polygon = OsmPolygon().apply {
                                 points = polyPoints
@@ -151,51 +171,99 @@ fun PredictionsScreen(
                             }
                             view.overlays.add(marker)
                         }
-                        
+
                         view.invalidate()
                     }
                 )
 
-                // Top Loading Indicator
+                // ===== Loading =====
                 if (viewModel.isLoading) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
+                        color = AppRed
+                    )
                 }
 
-                // Clear Pins Button overlay
+                // ===== Clear Pins Button =====
                 if (viewModel.userPins.isNotEmpty()) {
                     FilledTonalButton(
                         onClick = { viewModel.clearUserPins(context, sharedPref.getSavedUserId()) },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(top = 16.dp, end = 16.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color.White, contentColor = AppRed)
+                            .padding(top = 12.dp, end = 12.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = Color.White,
+                            contentColor = AppRed
+                        )
                     ) {
                         Text("ล้างหมุดพื้นที่", fontWeight = FontWeight.Bold)
                     }
                 }
 
-                // Legend Overlay
+                // ===== RIGHT SIDE: Zoom + MyLocation (เหมือน SetLocationScreen) =====
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 12.dp, bottom = 120.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Zoom In
+                    SmallFloatingActionButton(
+                        onClick = { mapViewRef?.controller?.zoomIn() },
+                        shape = RoundedCornerShape(8.dp),
+                        containerColor = AppRed,
+                        contentColor = Color.White,
+                        elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "ซูมเข้า", modifier = Modifier.size(20.dp))
+                    }
+                    // Zoom Out
+                    SmallFloatingActionButton(
+                        onClick = { mapViewRef?.controller?.zoomOut() },
+                        shape = RoundedCornerShape(8.dp),
+                        containerColor = AppRed,
+                        contentColor = Color.White,
+                        elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                    ) {
+                        Icon(Icons.Default.Remove, contentDescription = "ซูมออก", modifier = Modifier.size(20.dp))
+                    }
+                    // My Location (กลับมาจุดเริ่ม)
+                    SmallFloatingActionButton(
+                        onClick = {
+                            mapViewRef?.controller?.animateTo(initialPos)
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        containerColor = Color.White,
+                        contentColor = AppRed,
+                        elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                    ) {
+                        Icon(Icons.Default.MyLocation, contentDescription = "ใกล้ฉัน", modifier = Modifier.size(20.dp))
+                    }
+                }
+
+                // ===== Legend Overlay =====
                 Card(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(bottom = 16.dp, start = 16.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text("ระดับความเสี่ยง", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("ระดับความเสี่ยง", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AppTextDark)
                         Spacer(modifier = Modifier.height(4.dp))
-                        LegendItem(color = Color.Red, text = "เสี่ยงสูงมาก (High)")
+                        LegendItem(color = Color.Red,    text = "เสี่ยงสูงมาก (High)")
                         LegendItem(color = Color.Yellow, text = "เสี่ยงปานกลาง (Medium)")
-                        LegendItem(color = Color.Green, text = "เสี่ยงต่ำ (Low)")
+                        LegendItem(color = Color.Green,  text = "เสี่ยงต่ำ (Low)")
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("💡 กดค้างบนแผนที่เพื่อปักหมุดส่วนตัว", fontSize = 11.sp, color = Color.Gray)
                     }
                 }
             }
 
-            // Pin Confirmation Dialog
+            // ===== Pin Confirmation Dialog =====
             if (showPinDialog && selectedLatLng != null) {
                 AlertDialog(
                     onDismissRequest = { showPinDialog = false },
@@ -223,10 +291,9 @@ fun PredictionsScreen(
                             viewModel.addPin(context, request)
                             showPinDialog = false
                             pinLabel = ""
-                            // Refresh pins after a short delay or state update
                             viewModel.getUserPins(userId)
                         }) {
-                            Text("บันทึก")
+                            Text("บันทึก", color = AppRed, fontWeight = FontWeight.Bold)
                         }
                     },
                     dismissButton = {
