@@ -85,4 +85,11 @@ interface EarthquakeAPI {
 
     @DELETE("api/pins/{user_id}")
     suspend fun clearUserPins(@Path("user_id") userId: String): Response<GenericResponse>
+
+    // ---------- USER LOCATION ----------
+    @POST("api/user-location/{user_id}")
+    suspend fun saveUserLocation(@Path("user_id") userId: String, @Body data: SaveLocationRequest): Response<GenericResponse>
+
+    @GET("api/user-location/{user_id}")
+    suspend fun getUserLocation(@Path("user_id") userId: String): Response<UserLocationResponse>
 }

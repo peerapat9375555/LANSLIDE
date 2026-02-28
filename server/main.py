@@ -742,6 +742,63 @@ async def verify_alert(log_id: str, payload: VerifyAlertRequest):
         conn.close()
 
 # =============================================================
+# USER LOCATION - บันทึก/อัปเดตตำแหน่งของ user
+# =============================================================
+class SaveLocationRequest(BaseModel):
+    latitude: float
+    longitude: float
+    location_name: Optional[str] = None
+    district: Optional[str] = None
+
+@app.post("/api/user-location/{user_id}")
+async def save_user_location(user_id: str, payload: SaveLocationRequest):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT location_id FROM user_locations WHERE user_id = %s", (user_id,))
+        existing = cursor.fetchone()
+        if existing:
+            cursor.execute(
+                "UPDATE user_locations SET latitude=%s, longitude=%s, location_name=%s, district=%s, updated_at=NOW() WHERE user_id=%s",
+                (payload.latitude, payload.longitude, payload.location_name, payload.district, user_id)
+            )
+        else:
+            location_id = str(uuid.uuid4())
+            cursor.execute(
+                "INSERT INTO user_locations (location_id, user_id, latitude, longitude, location_name, district, updated_at) VALUES (%s, %s, %s, %s, %s, %s, NOW())",
+                (location_id, user_id, payload.latitude, payload.longitude, payload.location_name, payload.district)
+            )
+        conn.commit()
+        return {"status": "success", "message": "Location saved."}
+    except Exception as e:
+        conn.rollback()
+        print(f"[ERROR] save_user_location: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/user-location/{user_id}")
+async def get_user_location(user_id: str):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM user_locations WHERE user_id = %s", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            return {"status": "not_found", "data": None}
+        return {"status": "success", "data": row}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
 # ADMIN: UPDATE EMERGENCY SERVICE
 # =============================================================
 @app.put("/api/emergency/{service_id}")

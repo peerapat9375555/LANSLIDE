@@ -76,5 +76,8 @@ fun EarthquakeNavGraph(navController: NavHostController) {
             val pinId = backStackEntry.arguments?.getString("pinId") ?: ""
             PinDashboardScreen(navController, viewModel, pinId)
         }
+        composable(Screen.SetLocation.route) {
+            SetLocationScreen(navController, viewModel)
+        }
     }
 }

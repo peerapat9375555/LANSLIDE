@@ -85,4 +85,9 @@ sealed class Screen(val route: String, val name: String) {
     ) {
         fun createRoute(pinId: String) = "pin_dashboard_screen/$pinId"
     }
+
+    data object SetLocation : Screen(
+        route = "set_location_screen",
+        name = "ปักหมุดที่อยู่"
+    )
 }

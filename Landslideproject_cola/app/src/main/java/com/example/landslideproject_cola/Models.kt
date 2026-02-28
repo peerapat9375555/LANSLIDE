@@ -165,3 +165,26 @@ data class UserPinResponse(
     @SerializedName("longitude") val longitude: Double,
     @SerializedName("label") val label: String?
 )
+
+// ---- USER LOCATION ----
+data class SaveLocationRequest(
+    @SerializedName("latitude") val latitude: Double,
+    @SerializedName("longitude") val longitude: Double,
+    @SerializedName("location_name") val location_name: String?,
+    @SerializedName("district") val district: String?
+)
+
+data class UserLocationData(
+    @SerializedName("location_id") val location_id: String?,
+    @SerializedName("user_id") val user_id: String?,
+    @SerializedName("latitude") val latitude: Double?,
+    @SerializedName("longitude") val longitude: Double?,
+    @SerializedName("location_name") val location_name: String?,
+    @SerializedName("district") val district: String?,
+    @SerializedName("updated_at") val updated_at: String?
+)
+
+data class UserLocationResponse(
+    @SerializedName("status") val status: String,
+    @SerializedName("data") val data: UserLocationData?
+)

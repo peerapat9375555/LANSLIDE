@@ -491,4 +491,23 @@ class EarthquakeViewModel : ViewModel() {
             }
         }
     }
+
+    // ================= SAVE USER LOCATION =================
+    fun saveUserLocation(context: Context, userId: String, req: SaveLocationRequest, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val response = EarthquakeClient.earthquakeAPI.saveUserLocation(userId, req)
+                if (response.isSuccessful) {
+                    Toast.makeText(context, "บันทึกตำแหน่งสำเร็จ", Toast.LENGTH_SHORT).show()
+                    onResult(true)
+                } else {
+                    Toast.makeText(context, "บันทึกไม่สำเร็จ", Toast.LENGTH_SHORT).show()
+                    onResult(false)
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                onResult(false)
+            }
+        }
+    }
 }

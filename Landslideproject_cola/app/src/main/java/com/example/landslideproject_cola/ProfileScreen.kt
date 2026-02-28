@@ -176,6 +176,21 @@ fun ProfileScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // ปักหมุดที่อยู่
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = { navController.navigate(Screen.SetLocation.route) },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AppGreen)
+                ) {
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = AppGreen)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("ปักหมุดที่อยู่ของฉัน", fontSize = 15.sp, color = AppGreen)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 // Logout
                 OutlinedButton(
                     onClick = {
