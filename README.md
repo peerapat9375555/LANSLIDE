@@ -19,19 +19,7 @@
 - pv3: เพิ่มเส้นกั่น แถบ แฮมบาร์ เปลี่ยนไอคอนแอป   มีโนติเด้งข้างบน หรือล็อกจากเหตุใกล้ user20 กม       มีฟังก์ชั่นผู้ใช้ส่งข้อความ รูป ขอความช่วยเหลือ มาแจ้งแอดมิน   มีหน้าแอดมินเห็นเหตุที่แจ้ง แล้วกดยืนยัน เหตุจะไปหน้าประวัติการช่วยเหลือ
 
 - ลงดาต้าเบส landsnot_db.sql ใหม่ ก่อนใช้งาน
-### ML Pipeline (`retrain_model.py`)
-- **แก้ StandardScaler**: ตอนนี้ fit บน **original data (2,104 samples)** ก่อน balance — ป้องกัน mean/std เพี้ยนที่ทำให้ predict Medium/High สูงเกินจริง
-- เพิ่ม feature `Rain_10D_Prior` และ `Rain10D_x_Slope` (สะสมน้ำฝน 10 วัน × slope)
-- เพิ่ม **Probability Distribution Analysis** — แสดงสถิติหลังเทรนเพื่อ calibrate threshold
-- เพิ่ม **Threshold Simulation** — เปรียบเทียบ threshold 4 คู่ เลือกที่ balance false alert / recall ดีที่สุด
-- รองรับ optional: `xgboost`, `lightgbm`, `catboost` (ถ้า install แล้วจะเทรนเทียบด้วย)
 
-### Backend (`server/main.py`)
-- ปรับ Risk Threshold ตามผลวิเคราะห์ probability distribution:
-  - **Low**: prob < 0.50 (ไม่แจ้งเตือน)
-  - **Medium**: prob 0.50–0.84
-  - **High**: prob ≥ 0.85
-- ผลลัพธ์: ลด false alert ~57% ขณะที่ recall ยังอยู่ที่ **96.74%**
 
 ---
 
