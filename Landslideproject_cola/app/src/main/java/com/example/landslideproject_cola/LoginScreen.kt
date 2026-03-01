@@ -63,6 +63,8 @@ fun LoginScreen(
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
                 } else {
+                    // Start background notification service สำหรับ user ทั่วไป
+                    LandslideNotificationService.startService(context)
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }

@@ -98,4 +98,22 @@ sealed class Screen(val route: String, val name: String) {
     ) {
         fun createRoute(logId: String) = "user_alert_detail/$logId"
     }
+
+    // หน้าส่งรายงาน user → admin
+    data object UserReport : Screen(
+        route = "user_report_screen",
+        name = "ขอความช่วยเหลือ"
+    )
+
+    // หน้าแอดมินดูรายงานจาก user
+    data object AdminReports : Screen(
+        route = "admin_reports_screen",
+        name = "รายงานจากผู้ใช้"
+    )
+
+    // หน้าประวัติการช่วยเหลือ
+    data object AdminReportHistory : Screen(
+        route = "admin_report_history_screen",
+        name = "ประวัติการช่วยเหลือ"
+    )
 }

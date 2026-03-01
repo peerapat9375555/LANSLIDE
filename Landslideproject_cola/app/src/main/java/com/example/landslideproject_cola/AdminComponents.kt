@@ -78,10 +78,12 @@ fun AdminDrawer(navController: NavHostController, onClose: () -> Unit) {
         val items = listOf(
             Triple(Icons.Default.Build, "ดึงข้อมูล GEE / น้ำฝน", Screen.AdminAnalysis),
             Triple(Icons.Default.Phone, "แก้ไขเบอร์ฉุกเฉิน", Screen.AdminEmergency),
-            Triple(Icons.Default.DateRange, "ประวัติการแจ้งเตือน", Screen.AdminNotificationHistory)
+            Triple(Icons.Default.DateRange, "ประวัติการแจ้งเตือน", Screen.AdminNotificationHistory),
+            Triple(Icons.Default.Inbox, "รายงานจากผู้ใช้", Screen.AdminReports),
+            Triple(Icons.Default.History, "ประวัติการช่วยเหลือ", Screen.AdminReportHistory)
         )
 
-        items.forEach { (icon, label, screen) ->
+        items.forEachIndexed { index, (icon, label, screen) ->
             NavigationDrawerItem(
                 icon = { Icon(icon, null, tint = AppTextDark) },
                 label = { Text(label, color = AppTextDark, fontSize = 15.sp) },
@@ -92,6 +94,13 @@ fun AdminDrawer(navController: NavHostController, onClose: () -> Unit) {
                 },
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
+            if (index < items.lastIndex) {
+                Divider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = Color(0xFFBBBBBB),
+                    thickness = 1.dp
+                )
+            }
         }
 
         Spacer(modifier = Modifier.weight(1f))

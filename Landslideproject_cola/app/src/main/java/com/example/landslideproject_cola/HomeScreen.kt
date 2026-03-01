@@ -184,11 +184,12 @@ fun AppDrawer(navController: NavHostController, onClose: () -> Unit) {
             Triple(Icons.Default.Home,          "Dashboard",          Screen.Home),
             Triple(Icons.Default.LocationOn,    "Map",                Screen.Events),
             Triple(Icons.Default.Notifications, "แจ้งเตือนดินถล่ม",  Screen.Notifications),
+            Triple(Icons.Default.ReportProblem, "ขอความช่วยเหลือ",   Screen.UserReport),
             Triple(Icons.Default.Person,        "แก้ไขข้อมูลผู้ใช้", Screen.Profile),
             Triple(Icons.Default.Phone,         "เบอร์โทรฉุกเฉิน",   Screen.Emergency)
         )
 
-        items.forEach { (icon, label, screen) ->
+        items.forEachIndexed { index, (icon, label, screen) ->
             NavigationDrawerItem(
                 icon = { Icon(icon, null, tint = AppTextDark) },
                 label = { Text(label, color = AppTextDark, fontSize = 15.sp) },
@@ -199,6 +200,14 @@ fun AppDrawer(navController: NavHostController, onClose: () -> Unit) {
                 },
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
+            // ขีดคั่นระหว่าง item (ยกเว้น item สุดท้าย)
+            if (index < items.lastIndex) {
+                Divider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = Color(0xFFBBBBBB),
+                    thickness = 1.dp
+                )
+            }
         }
 
         // ดัน logout ลงล่างสุด

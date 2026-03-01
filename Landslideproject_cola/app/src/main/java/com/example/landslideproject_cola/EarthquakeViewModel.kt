@@ -510,4 +510,94 @@ class EarthquakeViewModel : ViewModel() {
             }
         }
     }
+
+    // ================= USER REPORT: ส่งรายงานไปแอดมิน =================
+    var userReports by mutableStateOf<List<UserReportItem>>(emptyList())
+        private set
+
+    fun submitUserReport(context: Context, request: UserReportRequest, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            isLoading = true
+            try {
+                val response = EarthquakeClient.earthquakeAPI.submitReport(request)
+                if (response.isSuccessful) {
+                    Toast.makeText(context, "ส่งรายงานสำเร็จ!", Toast.LENGTH_SHORT).show()
+                    onResult(true)
+                } else {
+                    Toast.makeText(context, "ส่งรายงานไม่สำเร็จ", Toast.LENGTH_SHORT).show()
+                    onResult(false)
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                onResult(false)
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    // ================= ADMIN: ดูรายงานจาก user =================
+    fun getAdminReports() {
+        viewModelScope.launch {
+            isLoading = true
+            try {
+                android.util.Log.d("AdminReports", "Calling GET /api/reports ...")
+                val response = EarthquakeClient.earthquakeAPI.getAdminReports()
+                android.util.Log.d("AdminReports", "Response code: ${response.code()}")
+                android.util.Log.d("AdminReports", "Response body: ${response.body()?.size} items")
+                if (response.isSuccessful) {
+                    userReports = response.body() ?: emptyList()
+                    android.util.Log.d("AdminReports", "Loaded ${userReports.size} reports")
+                } else {
+                    val errBody = response.errorBody()?.string()
+                    android.util.Log.e("AdminReports", "Error ${response.code()}: $errBody")
+                    errorMessage = "โหลดรายงานไม่สำเร็จ (${response.code()})"
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("AdminReports", "Exception: ${e.message}", e)
+                errorMessage = "Error: ${e.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    // ================= ADMIN: ช่วยเหลือเสร็จสิ้น =================
+    fun completeReport(context: Context, reportId: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                val response = EarthquakeClient.earthquakeAPI.completeReport(reportId)
+                if (response.isSuccessful) {
+                    // ลบออกจากรายการ pending
+                    userReports = userReports.filter { it.report_id != reportId }
+                    Toast.makeText(context, "✅ บันทึกว่าช่วยเหลือเสร็จสิ้นแล้ว", Toast.LENGTH_SHORT).show()
+                    onDone()
+                } else {
+                    Toast.makeText(context, "เกิดข้อผิดพลาด", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // ================= ADMIN: ประวัติการช่วยเหลือ =================
+    var completedReports by mutableStateOf<List<UserReportItem>>(emptyList())
+        private set
+
+    fun getReportHistory() {
+        viewModelScope.launch {
+            isLoading = true
+            try {
+                val response = EarthquakeClient.earthquakeAPI.getReportHistory()
+                if (response.isSuccessful) {
+                    completedReports = response.body() ?: emptyList()
+                }
+            } catch (e: Exception) {
+                errorMessage = "Error: ${e.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
 }

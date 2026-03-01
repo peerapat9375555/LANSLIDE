@@ -14,6 +14,8 @@ class SharedPreferencesManager(context: Context) {
         private const val KEY_USER_NAME = "user_name"
         private const val KEY_USER_EMAIL = "user_email"
         private const val KEY_ROLE = "role"
+        private const val KEY_SAVED_LAT = "saved_latitude"
+        private const val KEY_SAVED_LON = "saved_longitude"
     }
 
     fun saveLoginStatus(isLoggedIn: Boolean, userId: String, name: String, email: String, role: String) {
@@ -32,6 +34,18 @@ class SharedPreferencesManager(context: Context) {
     fun getSavedUserName(): String = preferences.getString(KEY_USER_NAME, "") ?: ""
     fun getSavedEmail(): String = preferences.getString(KEY_USER_EMAIL, "") ?: ""
     fun getSavedRole(): String = preferences.getString(KEY_ROLE, "user") ?: "user"
+
+    // === ตำแหน่งที่ user บันทึกไว้ (ใช้โดย notification service) ===
+    fun saveUserLatLon(lat: Double, lon: Double) {
+        preferences.edit().apply {
+            putFloat(KEY_SAVED_LAT, lat.toFloat())
+            putFloat(KEY_SAVED_LON, lon.toFloat())
+            apply()
+        }
+    }
+
+    fun getSavedLatitude(): Double = preferences.getFloat(KEY_SAVED_LAT, 0f).toDouble()
+    fun getSavedLongitude(): Double = preferences.getFloat(KEY_SAVED_LON, 0f).toDouble()
 
     fun logout() {
         preferences.edit().clear().apply()

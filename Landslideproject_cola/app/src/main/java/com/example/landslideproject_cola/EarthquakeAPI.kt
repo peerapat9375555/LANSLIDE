@@ -70,6 +70,10 @@ interface EarthquakeAPI {
     @GET("api/admin/alerts/history")
     suspend fun getAlertHistory(): Response<List<PendingAlert>>
 
+    // ดึง alerts ที่แอดมินยืนยัน (สำหรับ notification service ตรวจสอบระยะห่าง)
+    @GET("api/alerts/verified")
+    suspend fun getVerifiedAlerts(): Response<List<PendingAlert>>
+
     @POST("trigger-gee")
     suspend fun triggerGEE(): Response<GenericResponse>
 
@@ -92,4 +96,17 @@ interface EarthquakeAPI {
 
     @GET("api/user-location/{user_id}")
     suspend fun getUserLocation(@Path("user_id") userId: String): Response<UserLocationResponse>
+
+    // ---------- USER REPORTS ----------
+    @POST("api/reports")
+    suspend fun submitReport(@Body data: UserReportRequest): Response<GenericResponse>
+
+    @GET("api/reports")
+    suspend fun getAdminReports(): Response<List<UserReportItem>>
+
+    @PUT("api/reports/{report_id}/complete")
+    suspend fun completeReport(@Path("report_id") reportId: String): Response<GenericResponse>
+
+    @GET("api/reports/history")
+    suspend fun getReportHistory(): Response<List<UserReportItem>>
 }

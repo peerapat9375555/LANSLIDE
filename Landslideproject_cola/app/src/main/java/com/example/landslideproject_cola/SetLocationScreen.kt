@@ -269,6 +269,8 @@ fun SetLocationScreen(
                                     district = districtName,   // อำเภอ → DISTRICT
                                     tambon   = tambonName      // ตำบล  → TAMBON
                                 )
+                                // บันทึกพิกัดลง SharedPreferences เพื่อให้ notification service ใช้ได้
+                                sharedPref.saveUserLatLon(centerLat, centerLon)
                                 viewModel.saveUserLocation(context, userId, req) { ok ->
                                     isSaving = false
                                     saveSuccess = ok

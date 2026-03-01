@@ -84,5 +84,14 @@ fun EarthquakeNavGraph(navController: NavHostController) {
             val logId = backStackEntry.arguments?.getString("logId") ?: ""
             UserAlertDetailScreen(navController, viewModel, logId)
         }
+        composable(Screen.UserReport.route) {
+            UserReportScreen(navController, viewModel)
+        }
+        composable(Screen.AdminReports.route) {
+            AdminReportsScreen(navController, viewModel)
+        }
+        composable(Screen.AdminReportHistory.route) {
+            AdminReportHistoryScreen(navController, viewModel)
+        }
     }
 }

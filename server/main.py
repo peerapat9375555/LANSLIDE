@@ -647,6 +647,48 @@ async def get_alert_history():
         conn.close()
 
 # =============================================================
+# PUBLIC: GET VERIFIED ALERTS (สำหรับ mobile app ตรวจสอบระยะห่าง)
+# ดึงเฉพาะ alerts ที่แอดมิน approve แล้ว รวมพิกัด + ชื่อท้องถิ่น
+# =============================================================
+@app.get("/api/alerts/verified")
+async def get_verified_alerts():
+    """
+    ดึง prediction logs ที่ admin approve แล้ว (status='approved')
+    สำหรับให้ Android background service ตรวจสอบว่า user อยู่ใกล้หรือไม่
+    """
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        query = """
+        SELECT pl.log_id, pl.node_id, pl.risk_level, pl.probability, pl.timestamp,
+               sn.latitude, sn.longitude
+        FROM prediction_logs pl
+        JOIN static_nodes sn ON pl.node_id = sn.node_id
+        WHERE pl.status = 'approved'
+        ORDER BY pl.timestamp DESC
+        LIMIT 100
+        """
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        for row in rows:
+            for key, val in row.items():
+                if isinstance(val, (datetime.datetime, datetime.date)):
+                    row[key] = val.isoformat()
+            tambon, district = lookup_tambon_district(float(row['latitude']), float(row['longitude']))
+            row['tambon'] = tambon or ""
+            row['district'] = district or ""
+        return rows
+    except Exception as e:
+        print(f"[ERROR] get_verified_alerts: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# =============================================================
 # ADMIN: GET ALERT DETAILS
 # =============================================================
 @app.get("/api/admin/alerts/{log_id}")
@@ -849,6 +891,268 @@ async def get_user_location(user_id: str):
             return {"status": "not_found", "data": None}
         return {"status": "success", "data": row}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# USER REPORTS — ส่งรายงาน / ดูรายงาน
+# =============================================================
+
+class UserReportRequest(BaseModel):
+    user_id: str
+    title: str
+    message: str
+    image_base64: Optional[str] = None   # base64 JPEG
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+def ensure_reports_table(conn):
+    """สร้างตาราง user_reports ถ้ายังไม่มี (ใช้ collation เดียวกับ users)"""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_reports (
+                report_id   VARCHAR(36)  PRIMARY KEY,
+                user_id     VARCHAR(36)  NOT NULL,
+                title       VARCHAR(255) NOT NULL,
+                message     TEXT         NOT NULL,
+                img_url     TEXT,
+                latitude    DOUBLE,
+                longitude   DOUBLE,
+                status      VARCHAR(20)  DEFAULT 'pending',
+                completed_at DATETIME    DEFAULT NULL,
+                created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP
+            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci
+        """)
+        # แก้ collation ของตารางเดิม
+        cursor.execute("""
+            ALTER TABLE user_reports
+            CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci
+        """)
+        # เพิ่ม column status/completed_at ถ้ายังไม่มี
+        try:
+            cursor.execute("ALTER TABLE user_reports ADD COLUMN status VARCHAR(20) DEFAULT 'pending'")
+        except: pass
+        try:
+            cursor.execute("ALTER TABLE user_reports ADD COLUMN completed_at DATETIME DEFAULT NULL")
+        except: pass
+        conn.commit()
+        cursor.close()
+    except Exception as e:
+        print(f"[WARN] ensure_reports_table: {e}")
+
+@app.post("/api/reports")
+async def submit_report(payload: UserReportRequest):
+    """User ส่งรายงานพร้อมรูปภาพ (base64) และพิกัด"""
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        ensure_reports_table(conn)
+        cursor = conn.cursor()
+
+        # บันทึกรูปภาพเป็นไฟล์ (ถ้ามี base64)
+        img_url = None
+        if payload.image_base64:
+            try:
+                import base64 as b64
+                report_id_temp = str(uuid.uuid4())
+                img_data = b64.b64decode(payload.image_base64)
+                filename = f"report_{report_id_temp}.jpg"
+                img_path = os.path.join(uploads_dir, filename)
+                with open(img_path, 'wb') as f:
+                    f.write(img_data)
+                # URL ที่ client จะเข้าถึงได้
+                img_url = f"/uploads/{filename}"
+            except Exception as e:
+                print(f"[WARN] Image save error: {e}")
+                img_url = None
+
+        report_id = str(uuid.uuid4())
+        cursor.execute(
+            """INSERT INTO user_reports
+               (report_id, user_id, title, message, img_url, latitude, longitude)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (report_id, payload.user_id, payload.title, payload.message,
+             img_url, payload.latitude, payload.longitude)
+        )
+        conn.commit()
+        return {"status": "success", "message": "ส่งรายงานสำเร็จ", "report_id": report_id}
+    except Exception as e:
+        conn.rollback()
+        print(f"[ERROR] submit_report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/reports")
+async def get_all_reports():
+    """Admin ดูรายงานทั้งหมดจาก user พร้อมชื่อ + พิกัด (fallback จาก user_locations)"""
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        # ---- Step 1: ดึงเฉพาะ report ที่ยังรอดำเนินการ (pending) ----
+        # หมายเหตุ: ใช้ COLLATE utf8mb4_general_ci เพื่อแก้ collation mismatch ระหว่างตาราง
+        cursor.execute("""
+            SELECT r.report_id, r.user_id,
+                   u.name AS user_name,
+                   r.title, r.message, r.img_url,
+                   r.latitude, r.longitude,
+                   r.created_at
+            FROM user_reports r
+            LEFT JOIN users u
+                ON r.user_id COLLATE utf8mb4_general_ci = u.user_id
+            WHERE r.status = 'pending' OR r.status IS NULL
+            ORDER BY r.created_at DESC
+        """)
+        rows = cursor.fetchall()
+        print(f"[DEBUG] get_all_reports: found {len(rows)} reports")
+
+        # ---- Step 2: เสริม tambon/district/พิกัด จาก user_locations ----
+        for row in rows:
+            # datetime → string
+            for key, val in row.items():
+                if isinstance(val, (datetime.datetime, datetime.date)):
+                    row[key] = val.isoformat()
+
+            # แปลง Decimal → float
+            for coord in ('latitude', 'longitude'):
+                if row.get(coord) is not None:
+                    try:
+                        row[coord] = float(row[coord])
+                    except:
+                        row[coord] = None
+
+            row['tambon'] = None
+            row['district'] = None
+
+            # ดึงพิกัด + tambon/district จาก user_locations
+            try:
+                c2 = conn.cursor(dictionary=True)
+                c2.execute(
+                    "SELECT latitude, longitude, tambon, district FROM user_locations WHERE user_id = %s LIMIT 1",
+                    (row['user_id'],)
+                )
+                loc = c2.fetchone()
+                c2.close()
+                if loc:
+                    if row.get('latitude') is None and loc.get('latitude') is not None:
+                        row['latitude'] = float(loc['latitude'])
+                    if row.get('longitude') is None and loc.get('longitude') is not None:
+                        row['longitude'] = float(loc['longitude'])
+                    row['tambon']   = loc.get('tambon')
+                    row['district'] = loc.get('district')
+            except Exception as loc_err:
+                print(f"[WARN] user_locations lookup failed: {loc_err}")
+
+            # img_url → full URL
+            if row.get('img_url') and not str(row['img_url']).startswith('http'):
+                base = os.environ.get('BASE_URL', 'http://10.0.2.2:8000')
+                row['img_url'] = base + row['img_url']
+
+        return rows
+
+    except Exception as e:
+        print(f"[ERROR] get_all_reports: {e}")
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ---- กดช่วยเหลือเสร็จสิ้น ----
+@app.put("/api/reports/{report_id}/complete")
+async def complete_report(report_id: str):
+    """Admin กดยืนยันว่าช่วยเหลือเสร็จสิ้น"""
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor()
+
+        # เพิ่ม column ถ้ายังไม่มี (migration อัตโนมัติ)
+        try:
+            cursor.execute("ALTER TABLE user_reports ADD COLUMN status VARCHAR(20) DEFAULT 'pending'")
+            conn.commit()
+        except: pass
+        try:
+            cursor.execute("ALTER TABLE user_reports ADD COLUMN completed_at DATETIME DEFAULT NULL")
+            conn.commit()
+        except: pass
+
+        # อัปเดต status
+        cursor.execute(
+            """UPDATE user_reports
+               SET status = 'completed', completed_at = NOW()
+               WHERE report_id = %s""",
+            (report_id,)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="ไม่พบรายงาน")
+        conn.commit()
+        return {"status": "success", "message": "บันทึกว่าช่วยเหลือเสร็จสิ้นแล้ว"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        print(f"[ERROR] complete_report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+# ---- ประวัติการช่วยเหลือ (completed) ----
+@app.get("/api/reports/history")
+async def get_report_history():
+    """Admin ดูรายงานที่ช่วยเหลือเสร็จสิ้นแล้ว"""
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT r.report_id, r.user_id,
+                   u.name AS user_name,
+                   r.title, r.message, r.img_url,
+                   r.latitude, r.longitude,
+                   r.status, r.completed_at, r.created_at
+            FROM user_reports r
+            LEFT JOIN users u
+                ON r.user_id COLLATE utf8mb4_general_ci = u.user_id
+            WHERE r.status = 'completed'
+            ORDER BY r.completed_at DESC
+        """)
+        rows = cursor.fetchall()
+        for row in rows:
+            for key, val in row.items():
+                if isinstance(val, (datetime.datetime, datetime.date)):
+                    row[key] = val.isoformat()
+            for coord in ('latitude', 'longitude'):
+                if row.get(coord) is not None:
+                    try: row[coord] = float(row[coord])
+                    except: row[coord] = None
+            if row.get('img_url') and not str(row['img_url']).startswith('http'):
+                base = os.environ.get('BASE_URL', 'http://10.0.2.2:8000')
+                row['img_url'] = base + row['img_url']
+            # เสริม tambon/district
+            try:
+                c2 = conn.cursor(dictionary=True)
+                c2.execute("SELECT tambon, district FROM user_locations WHERE user_id = %s LIMIT 1", (row['user_id'],))
+                loc = c2.fetchone(); c2.close()
+                row['tambon']   = loc.get('tambon')   if loc else None
+                row['district'] = loc.get('district') if loc else None
+            except: row['tambon'] = row['district'] = None
+        return rows
+    except Exception as e:
+        print(f"[ERROR] get_report_history: {e}")
+        import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()

@@ -191,3 +191,29 @@ data class UserLocationResponse(
     @SerializedName("status") val status: String,
     @SerializedName("data") val data: UserLocationData?
 )
+
+// ---- USER REPORT (ส่งข้อมูลให้แอดมิน) ----
+data class UserReportRequest(
+    @SerializedName("user_id") val user_id: String,
+    @SerializedName("title") val title: String,
+    @SerializedName("message") val message: String,
+    @SerializedName("image_base64") val image_base64: String?,
+    @SerializedName("latitude") val latitude: Double?,
+    @SerializedName("longitude") val longitude: Double?
+)
+
+data class UserReportItem(
+    @SerializedName("report_id") val report_id: String,
+    @SerializedName("user_id") val user_id: String,
+    @SerializedName("user_name") val user_name: String?,
+    @SerializedName("title") val title: String,
+    @SerializedName("message") val message: String,
+    @SerializedName("img_url") val img_url: String?,
+    @SerializedName("latitude") val latitude: Double?,
+    @SerializedName("longitude") val longitude: Double?,
+    @SerializedName("tambon") val tambon: String?,
+    @SerializedName("district") val district: String?,
+    @SerializedName("status") val status: String?,
+    @SerializedName("completed_at") val completed_at: String?,
+    @SerializedName("created_at") val created_at: String?
+)
