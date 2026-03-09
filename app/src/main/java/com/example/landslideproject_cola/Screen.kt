@@ -41,4 +41,11 @@ sealed class Screen(val route: String, val name: String) {
         route = "profile_screen",
         name = "โปรไฟล์"
     )
+
+    data object NotificationDetail : Screen(
+        route = "notification_detail_screen/{predictionId}",
+        name = "รายละเอียดแจ้งเตือน"
+    ) {
+        fun createRoute(predictionId: String) = "notification_detail_screen/$predictionId"
+    }
 }

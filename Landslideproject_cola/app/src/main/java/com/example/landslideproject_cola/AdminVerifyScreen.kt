@@ -36,7 +36,14 @@ fun AdminVerifyScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("ยืนยันการแจ้งเตือน", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        "ยืนยันการแจ้งเตือน",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
@@ -63,19 +70,10 @@ fun AdminVerifyScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // รายละเอียดครบ + ปุ่มยืนยัน/ไม่ยืนยัน
                 AdminDashboardContent(
                     detail = alertDetail,
-                    showVerifyButtons = true,
-                    onApprove = {
-                        viewModel.verifyAlert(context, logId, "approve") {
-                            navController.popBackStack()
-                        }
-                    },
-                    onReject = {
-                        viewModel.verifyAlert(context, logId, "reject") {
-                            navController.popBackStack()
-                        }
-                    }
+                    showVerifyButtons = false
                 )
             }
         }

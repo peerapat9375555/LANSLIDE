@@ -288,10 +288,11 @@ fun PredictionsScreen(
                                 longitude = selectedLatLng!!.longitude,
                                 label = pinLabel.ifEmpty { "Pinned Location" }
                             )
-                            viewModel.addPin(context, request)
+                            viewModel.addPin(context, request) {
+                                viewModel.getUserPins(userId)
+                            }
                             showPinDialog = false
                             pinLabel = ""
-                            viewModel.getUserPins(userId)
                         }) {
                             Text("บันทึก", color = AppRed, fontWeight = FontWeight.Bold)
                         }

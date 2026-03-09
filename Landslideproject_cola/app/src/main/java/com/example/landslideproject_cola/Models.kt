@@ -179,13 +179,16 @@ data class SaveLocationRequest(
 data class UserLocationData(
     @SerializedName("location_id") val location_id: String?,
     @SerializedName("user_id") val user_id: String?,
-    @SerializedName("latitude") val latitude: Double?,
-    @SerializedName("longitude") val longitude: Double?,
+    @SerializedName("latitude") val latitudeRaw: Any?,
+    @SerializedName("longitude") val longitudeRaw: Any?,
     @SerializedName("location_name") val location_name: String?,
     @SerializedName("district") val district: String?,   // อำเภอ
     @SerializedName("tambon") val tambon: String?,        // ตำบล
     @SerializedName("updated_at") val updated_at: String?
-)
+) {
+    val latitude: Double? get() = latitudeRaw?.toString()?.toDoubleOrNull()
+    val longitude: Double? get() = longitudeRaw?.toString()?.toDoubleOrNull()
+}
 
 data class UserLocationResponse(
     @SerializedName("status") val status: String,

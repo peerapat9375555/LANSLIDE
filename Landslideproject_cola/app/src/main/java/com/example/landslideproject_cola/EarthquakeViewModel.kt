@@ -45,6 +45,9 @@ class EarthquakeViewModel : ViewModel() {
     var userPins by mutableStateOf<List<UserPinResponse>>(emptyList())
         private set
 
+    var userLocation by mutableStateOf<UserLocationData?>(null)
+        private set
+
     var pinDashboard by mutableStateOf<UserPinDashboard?>(null)
         private set
 
@@ -142,16 +145,20 @@ class EarthquakeViewModel : ViewModel() {
     }
 
     // ================= ADD PIN =================
-    fun addPin(context: Context, request: PinRequest) {
+    fun addPin(context: Context, request: PinRequest, onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
             try {
                 val response = EarthquakeClient.earthquakeAPI.createPin(request)
                 if (response.isSuccessful) {
                     Toast.makeText(context, "เพิ่มจุดปักหมุดสำเร็จ", Toast.LENGTH_SHORT).show()
+                    onSuccess()
                 } else {
-                    Toast.makeText(context, "ไม่สามารถเพิ่มจุดได้", Toast.LENGTH_SHORT).show()
+                    val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                    android.util.Log.e("UserPins", "Add Pin Failed: $errorBody")
+                    Toast.makeText(context, "ปักหมุดล้มเหลว: $errorBody", Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
+                android.util.Log.e("UserPins", "Add Pin Exception", e)
                 Toast.makeText(context, "เกิดข้อผิดพลาด: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
@@ -398,11 +405,42 @@ class EarthquakeViewModel : ViewModel() {
     fun getUserPins(userId: String) {
         viewModelScope.launch {
             try {
+                android.util.Log.d("UserPins", "Calling GET /api/user-pins for user: $userId")
                 val response = EarthquakeClient.earthquakeAPI.getUserPins(userId)
+                android.util.Log.d("UserPins", "Response code: ${response.code()}")
                 if (response.isSuccessful) {
                     userPins = response.body() ?: emptyList()
+                    android.util.Log.d("UserPins", "Successfully loaded ${userPins.size} pins")
+                } else {
+                    val errBody = response.errorBody()?.string()
+                    android.util.Log.e("UserPins", "Error ${response.code()}: $errBody")
                 }
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                android.util.Log.e("UserPins", "Exception: ${e.message}", e)
+            }
+        }
+    }
+
+    // ================= USER LOCATION: GET LOCATION =================
+    fun getUserLocation(userId: String) {
+        viewModelScope.launch {
+            try {
+                android.util.Log.d("UserLocation", "Calling GET /api/user-location for user: $userId")
+                val response = EarthquakeClient.earthquakeAPI.getUserLocation(userId)
+                android.util.Log.d("UserLocation", "Response code: ${response.code()}")
+                if (response.isSuccessful && response.body()?.status == "success") {
+                    val data = response.body()?.data
+                    android.util.Log.d("UserLocation", "Parsed Data: lat=${data?.latitude}, lon=${data?.longitude}, tambon=${data?.tambon}")
+                    userLocation = data
+                } else {
+                    val errBody = response.errorBody()?.string()
+                    android.util.Log.e("UserLocation", "Error or Not Found: ${response.code()} Body: $errBody")
+                    userLocation = null
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("UserLocation", "Exception: ${e.message}", e)
+                userLocation = null
+            }
         }
     }
 

@@ -1,8 +1,10 @@
 package com.example.landslideproject_cola
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -37,8 +39,7 @@ fun HomeScreen(
         viewModel.getEvents()
     }
 
-    val predictions = viewModel.predictions.take(3)
-    val events = viewModel.events.take(3)
+    val predictions = viewModel.predictions
 
     // ====== Drawer + Main ======
     ModalNavigationDrawer(
@@ -83,10 +84,156 @@ fun HomeScreen(
                 ) {
                     Text("รับการแจ้งเตือนแผนที่ ●", color = AppWhite, fontWeight = FontWeight.Bold)
                 }
+
+                // ---- Section: รายชื่อเหตุแจ้งเตือน ----
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "รายชื่อเหตุแจ้งเตือน",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = AppTextDark
+                    )
+                    TextButton(onClick = { navController.navigate(Screen.Notifications.route) }) {
+                        Text("ดูทั้งหมด", fontSize = 13.sp, color = AppGreen)
+                    }
+                }
+
+                if (predictions.isEmpty()) {
+                    // Loading / Empty state
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = AppWhite),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "ไม่มีข้อมูลแจ้งเตือน",
+                                color = AppTextGrey,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                } else {
+                    // แสดงรายการ predictions (สูงสุด 10 รายการ)
+                    predictions.take(10).forEach { pred ->
+                        AlertNotifCard(
+                            prediction = pred,
+                            onClick = {
+                                navController.navigate(
+                                    Screen.NotificationDetail.createRoute(pred.prediction_id)
+                                )
+                            }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
 }
+
+// ====== Alert Notification Card ======
+@Composable
+fun AlertNotifCard(prediction: LandslidePrediction, onClick: () -> Unit) {
+    val riskLevel = prediction.risk_level ?: "Low"
+    val dotColor = when (riskLevel.lowercase()) {
+        "high" -> Color(0xFFE53935)
+        "medium" -> Color(0xFFFF9800)
+        else -> Color(0xFF4CAF50)
+    }
+    val conf = prediction.confidence ?: 0f
+    val confText = "${String.format("%.1f", conf * 100)}%"
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = AppWhite),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // สีจุดบ่งบอกระดับความเสี่ยง
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(dotColor, CircleShape)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                // ชื่อ: ระดับความเสี่ยง
+                val riskLabel = when (riskLevel.lowercase()) {
+                    "high" -> "สูง"
+                    "medium" -> "ปานกลาง"
+                    else -> "ต่ำ"
+                }
+                Text(
+                    "ความเสี่ยง: $riskLabel (รอยืนยัน)",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = AppTextDark
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+
+                // ตำบล อำเภอ
+                if (!prediction.district.isNullOrEmpty()) {
+                    Text(
+                        prediction.district,
+                        fontSize = 13.sp,
+                        color = AppTextGrey
+                    )
+                }
+
+                // Lat / Lon
+                val lat = prediction.latitude ?: 0.0
+                val lon = prediction.longitude ?: 0.0
+                Text(
+                    "ละติจูด: ${String.format("%.4f", lat)}, ลองจิจูด: ${String.format("%.4f", lon)}",
+                    fontSize = 12.sp,
+                    color = AppTextGrey
+                )
+
+                // ความน่าจะเป็น
+                Text(
+                    "ความน่าจะเป็น: $confText",
+                    fontSize = 12.sp,
+                    color = AppTextGrey
+                )
+
+                // วันที่
+                if (!prediction.analyzed_at.isNullOrEmpty()) {
+                    Text(
+                        prediction.analyzed_at.take(19).replace("T", " "),
+                        fontSize = 11.sp,
+                        color = AppTextGrey
+                    )
+                }
+            }
+
+            // ลูกศรชี้ขวา
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = AppTextGrey,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
 
 @Composable
 fun AnalysisCard() {

@@ -4,8 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 
 @Composable
 fun EarthquakeNavGraph(navController: NavHostController) {
@@ -45,5 +47,13 @@ fun EarthquakeNavGraph(navController: NavHostController) {
         composable(Screen.Profile.route) {
             ProfileScreen(navController, viewModel)
         }
+        composable(
+            route = Screen.NotificationDetail.route,
+            arguments = listOf(navArgument("predictionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val predictionId = backStackEntry.arguments?.getString("predictionId") ?: ""
+            NotificationDetailScreen(navController = navController, viewModel = viewModel, predictionId = predictionId)
+        }
     }
 }
+

@@ -1,7 +1,10 @@
 package com.example.landslideproject_cola
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,10 +27,12 @@ fun AdminHomeScreen(navController: NavHostController, viewModel: EarthquakeViewM
     val scope = rememberCoroutineScope()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
 
-    // Load first pending alert for dashboard preview
     LaunchedEffect(Unit) {
         viewModel.getPendingAlerts()
     }
+
+    val alerts = viewModel.pendingAlerts.sortedByDescending { it.probability }
+    val isLoading = viewModel.isLoading
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -38,44 +43,80 @@ fun AdminHomeScreen(navController: NavHostController, viewModel: EarthquakeViewM
             bottomBar = { AdminBottomNavigationBar(navController, currentRoute) },
             containerColor = AppGrey
         ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                val alerts = viewModel.pendingAlerts
-                if (alerts.isEmpty()) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp).fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
+            when {
+                isLoading -> {
+                    Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = AppRed)
+                    }
+                }
+                alerts.isEmpty() -> {
+                    Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                        Card(
+                            modifier = Modifier.padding(24.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White)
                         ) {
-                            Text("ยังไม่มีข้อมูลจากการวิเคราะห์", fontSize = 16.sp, color = AppTextGrey)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("กรุณาดึงข้อมูลน้ำฝนและวิเคราะห์ก่อน", fontSize = 13.sp, color = AppTextGrey)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("ไปที่เมนู ☰ → ดึงข้อมูล GEE / น้ำฝน", fontSize = 13.sp, color = AppRed)
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("ยังไม่มีข้อมูลจากการวิเคราะห์", fontSize = 16.sp, color = AppTextGrey)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("กรุณาดึงข้อมูลน้ำฝนและวิเคราะห์ก่อน", fontSize = 13.sp, color = AppTextGrey)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("ไปที่เมนู ☰ → ดึงข้อมูล GEE / น้ำฝน", fontSize = 13.sp, color = AppRed)
+                            }
                         }
                     }
-                } else {
-                    // Show the first alert as a preview dashboard
-                    val alert = alerts.first()
-                    viewModel.getAlertDetails(alert.log_id)
-                    val detail = viewModel.adminAlertDetail
+                }
+                else -> {
+                    // --- Section Header ---
+                    Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "รายชื่อเหตุแจ้งเตือน",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = AppTextDark
+                            )
+                            Text(
+                                "${alerts.size} รายการ",
+                                fontSize = 13.sp,
+                                color = AppTextGrey
+                            )
+                        }
 
-                    AdminDashboardContent(detail = detail)
+                        // --- Alert List ---
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(bottom = 16.dp)
+                        ) {
+                            items(alerts) { alert ->
+                                val ctx = androidx.compose.ui.platform.LocalContext.current
+                                AdminAlertCard(
+                                    alert = alert,
+                                    onClick = { navController.navigate(Screen.AdminVerify.createRoute(alert.log_id)) },
+                                    showButtons = false
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
+
+
 
 // ====== Shared Dashboard Content for AdminHome and AdminVerify ======
 @Composable
