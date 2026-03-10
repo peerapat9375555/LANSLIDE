@@ -1,14 +1,22 @@
-# ระบบพยากรณ์และแจ้งเตือนภัยดินถล่ม (Landslide Warning System)
+# 🛡️ ระบบพยากรณ์และแจ้งเตือนภัยดินถล่ม (Landslide Warning System)
+
+> [!CAUTION]
+> ### 🛑 คำเตือนเรื่องความปลอดภัย (CRITICAL SECURITY WARNING)
+> **ห้ามนำไฟล์ `.env` หรือ API Key / Service Account ID ใดๆ อัปโหลดขึ้น GitHub หรือแชร์ให้ผู้อื่นโดยเด็ดขาด!**
+> - ตรวจสอบให้แน่ใจว่าไฟล์ `.env` อยู่ใน `.gitignore` เสมอ
+> - หากเผลอทำหลุด ให้รีบทำการ Revoke Key และสร้างใหม่ทันที
+> - **ห้ามแชร์ไฟล์ `google-key.json` (ถ้ามี) หรือสิทธิ์เข้าถึง GEE ของคุณให้ใคร**
 
 โปรเจคนี้คือระบบแจ้งเตือนและประเมินความเสี่ยงดินถล่ม ประกอบด้วย 2 ส่วนหลักคือ **API Backend** (Python FastAPI) และแอปพลิเคชัน **Android** (Kotlin + Jetpack Compose)
 
-## 🚀 สถาปัตยกรรม
-1. **เซิร์ฟเวอร์ Python FastAPI** (`server/main.py`) — จัดการทั้ง AI Model Inference, ระบบ API, ดึงข้อมูล GEE และน้ำฝน
-2. **แผนที่ OSMDroid** — ใช้ OpenStreetMap ฟรี 100% (ไม่ต้องใช้ Google Maps API Key)
-3. **ฐานข้อมูล MySQL** ผ่าน XAMPP
-4. **Google Earth Engine** — ดึงข้อมูลภูมิประเทศ (Elevation, Slope, NDVI ฯลฯ) ลง DB
-5. **Open-Meteo API** — ดึงข้อมูลน้ำฝน 10 วันย้อนหลัง
-6. **ML Model (Random Forest)** — ทำนายความเสี่ยงดินถล่มจาก 27 features
+## 🚀 สถาปัตยกรรมระบบ
+1. **Backend** (`server/main.py`): จัดการ AI Model, API, และการดึงข้อมูลจาก GEE/Open-Meteo
+2. **Database**: MySQL (XAMPP) สำหรับเก็บพิกัด, ข้อมูลสถิติ และประวัติการแจ้งเตือน
+3. **Frontend**: Android App พัฒนาด้วย Jetpack Compose ใช้แผนที่ OSMDroid (ฟรี 100%)
+4. **Data Sources**:
+   - **Google Earth Engine (GEE)**: ดึงข้อมูล Elevation, Slope, NDVI, ฯลฯ
+   - **Open-Meteo**: ดึงข้อมูลน้ำฝนย้อนหลัง 10 วัน
+5. **AI Model**: ใช้ Random Forest ในการวิเคราะห์ความเสี่ยงจาก 27 ปัจจัย
 
 ---
 
