@@ -594,7 +594,11 @@ async def get_pending_alerts():
         FROM prediction_logs pl
         JOIN static_nodes sn ON pl.node_id = sn.node_id
         WHERE pl.status = 'pending'
-        ORDER BY pl.timestamp DESC
+          AND DATE(pl.timestamp) = (
+              SELECT DATE(MAX(timestamp)) FROM prediction_logs WHERE status = 'pending'
+          )
+        ORDER BY pl.probability DESC
+        LIMIT 100
         """
         cursor.execute(query)
         rows = cursor.fetchall()
@@ -616,21 +620,83 @@ async def get_pending_alerts():
 # ADMIN: GET ALERT HISTORY (approved alerts)
 # =============================================================
 @app.get("/api/admin/alerts/history")
-async def get_alert_history():
+async def get_alert_history(startDate: str = None, endDate: str = None):
     conn = get_db_connection()
     if not conn:
         raise HTTPException(status_code=500, detail="Database connection error")
     try:
         cursor = conn.cursor(dictionary=True)
+        # Base query (Only show alerts that admin explicitly approved or rejected)
         query = """
-        SELECT pl.log_id, pl.node_id, pl.risk_level, pl.probability, pl.timestamp, 
+        SELECT pl.log_id, pl.node_id, pl.risk_level, pl.probability, pl.timestamp, pl.status,
+               sn.latitude, sn.longitude
+        FROM prediction_logs pl
+        JOIN static_nodes sn ON pl.node_id = sn.node_id
+        WHERE pl.status IN ('approved', 'rejected')
+        """
+        
+        args = []
+        if startDate and endDate:
+            query += " AND DATE(pl.timestamp) BETWEEN %s AND %s "
+            args.extend([startDate, endDate])
+        elif startDate:
+            query += " AND DATE(pl.timestamp) >= %s "
+            args.append(startDate)
+        elif endDate:
+            query += " AND DATE(pl.timestamp) <= %s "
+            args.append(endDate)
+            
+        query += " ORDER BY pl.timestamp DESC LIMIT 200 "
+        
+        cursor.execute(query, tuple(args) if args else None)
+        rows = cursor.fetchall()
+        for row in rows:
+            for key, val in row.items():
+                if isinstance(val, (datetime.datetime, datetime.date)):
+                    row[key] = val.isoformat()
+            tambon, district = lookup_tambon_district(float(row['latitude']), float(row['longitude']))
+            row['tambon'] = tambon
+            row['district'] = district
+        return rows
+    except Exception as e:
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# ADMIN: GET SENT NOTIFICATION HISTORY (approved alerts only)
+# =============================================================
+@app.get("/api/admin/notifications/history")
+async def get_sent_notification_history(startDate: str = None, endDate: str = None):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        # Base query
+        query = """
+        SELECT pl.log_id, pl.node_id, pl.risk_level, pl.probability, pl.timestamp, pl.status,
                sn.latitude, sn.longitude
         FROM prediction_logs pl
         JOIN static_nodes sn ON pl.node_id = sn.node_id
         WHERE pl.status = 'approved'
-        ORDER BY pl.timestamp DESC
         """
-        cursor.execute(query)
+        
+        args = []
+        if startDate and endDate:
+            query += " AND DATE(pl.timestamp) BETWEEN %s AND %s "
+            args.extend([startDate, endDate])
+        elif startDate:
+            query += " AND DATE(pl.timestamp) >= %s "
+            args.append(startDate)
+        elif endDate:
+            query += " AND DATE(pl.timestamp) <= %s "
+            args.append(endDate)
+            
+        query += " ORDER BY pl.timestamp DESC LIMIT 200 "
+        
+        cursor.execute(query, tuple(args) if args else None)
         rows = cursor.fetchall()
         for row in rows:
             for key, val in row.items():

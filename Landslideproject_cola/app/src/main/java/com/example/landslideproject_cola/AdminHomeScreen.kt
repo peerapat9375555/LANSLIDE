@@ -22,14 +22,25 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import kotlinx.coroutines.launch
 
 @Composable
-fun AdminHomeScreen(navController: NavHostController, viewModel: EarthquakeViewModel) {
+fun AdminHomeScreen(navController: NavHostController, viewModel: EarthquakeViewModel, logId: String? = null) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
 
     LaunchedEffect(Unit) {
         viewModel.getPendingAlerts()
     }
+
+    // Sync nav arg logId into ViewModel (only when first arriving from Alerts list)
+    LaunchedEffect(logId) {
+        if (logId != null) {
+            viewModel.setDashboardLogId(logId)
+        }
+    }
+
+    // Use ViewModel as single source of truth for current detail
+    val activeLogId = viewModel.currentDashboardLogId
 
     val alerts = viewModel.pendingAlerts.sortedByDescending { it.probability }
     val isLoading = viewModel.isLoading
@@ -43,32 +54,88 @@ fun AdminHomeScreen(navController: NavHostController, viewModel: EarthquakeViewM
             bottomBar = { AdminBottomNavigationBar(navController, currentRoute) },
             containerColor = AppGrey
         ) { padding ->
-            when {
-                isLoading -> {
+            // --- Case 1: Displaying Details for a specific Log ID ---
+            if (activeLogId != null) {
+                LaunchedEffect(activeLogId) {
+                    // Only fetch if we don't already have the correct detail cached
+                    if (viewModel.adminAlertDetail?.log_id != activeLogId) {
+                        viewModel.getAlertDetails(activeLogId)
+                    }
+                }
+                val alertDetail = viewModel.adminAlertDetail
+
+                if (alertDetail == null || alertDetail.log_id != activeLogId) {
                     Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = AppRed)
                     }
-                }
-                alerts.isEmpty() -> {
-                    Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                        Card(
-                            modifier = Modifier.padding(24.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White)
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                            .padding(16.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Back button to return to list
+                        TextButton(
+                            onClick = {
+                                viewModel.setDashboardLogId(null)
+                                viewModel.getPendingAlerts()
+                            }
                         ) {
-                            Column(
+                            Text("← กลับหน้ารายการ", color = AppRed, fontWeight = FontWeight.Bold)
+                        }
+
+                        AdminDashboardContent(
+                            detail = alertDetail,
+                            showVerifyButtons = true,
+                            onApprove = {
+                                viewModel.verifyAlert(context, activeLogId, "approve") {
+                                    viewModel.setDashboardLogId(null)
+                                    viewModel.getPendingAlerts()
+                                }
+                            },
+                            onReject = {
+                                viewModel.verifyAlert(context, activeLogId, "reject") {
+                                    viewModel.setDashboardLogId(null)
+                                    viewModel.getPendingAlerts()
+                                }
+                            },
+                            onViewMap = { lat: Double, lon: Double ->
+                                navController.navigate(Screen.AdminMap.createRoute(lat.toFloat(), lon.toFloat()))
+                            }
+                        )
+                    }
+                }
+            } else {
+                // --- Case 2: Displaying the Main Home Dashboard Summary ---
+                when {
+                    isLoading -> {
+                        Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = AppRed)
+                        }
+                    }
+                    alerts.isEmpty() -> {
+                        Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                            Card(
                                 modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White)
                             ) {
-                                Text("ยังไม่มีข้อมูลจากการวิเคราะห์", fontSize = 16.sp, color = AppTextGrey)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("กรุณาดึงข้อมูลน้ำฝนและวิเคราะห์ก่อน", fontSize = 13.sp, color = AppTextGrey)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("ไปที่เมนู ☰ → ดึงข้อมูล GEE / น้ำฝน", fontSize = 13.sp, color = AppRed)
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text("ยังไม่มีข้อมูลจากการวิเคราะห์", fontSize = 16.sp, color = AppTextGrey)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("กรุณาดึงข้อมูลน้ำฝนและวิเคราะห์ก่อน", fontSize = 13.sp, color = AppTextGrey)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("ไปที่เมนู ☰ → ดึงข้อมูล GEE / น้ำฝน", fontSize = 13.sp, color = AppRed)
+                                }
                             }
                         }
                     }
-                }
                 else -> {
                     // --- Section Header ---
                     Column(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -104,7 +171,7 @@ fun AdminHomeScreen(navController: NavHostController, viewModel: EarthquakeViewM
                                 val ctx = androidx.compose.ui.platform.LocalContext.current
                                 AdminAlertCard(
                                     alert = alert,
-                                    onClick = { navController.navigate(Screen.AdminVerify.createRoute(alert.log_id)) },
+                                    onClick = { viewModel.setDashboardLogId(alert.log_id) },
                                     showButtons = false
                                 )
                             }
@@ -115,12 +182,17 @@ fun AdminHomeScreen(navController: NavHostController, viewModel: EarthquakeViewM
         }
     }
 }
-
-
+}
 
 // ====== Shared Dashboard Content for AdminHome and AdminVerify ======
 @Composable
-fun AdminDashboardContent(detail: AdminAlertDetail?, showVerifyButtons: Boolean = false, onApprove: () -> Unit = {}, onReject: () -> Unit = {}) {
+fun AdminDashboardContent(
+    detail: AdminAlertDetail?, 
+    showVerifyButtons: Boolean = false, 
+    onApprove: () -> Unit = {}, 
+    onReject: () -> Unit = {},
+    onViewMap: ((Double, Double) -> Unit)? = null
+) {
     if (detail == null) {
         Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = AppRed)
@@ -161,7 +233,26 @@ fun AdminDashboardContent(detail: AdminAlertDetail?, showVerifyButtons: Boolean 
                 }
             }
             Spacer(modifier = Modifier.height(4.dp))
-            Text("Lat: ${detail.latitude}, Lon: ${detail.longitude}", fontSize = 11.sp, color = AppTextGrey)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Lat: ${detail.latitude}, Lon: ${detail.longitude}", 
+                    fontSize = 11.sp, 
+                    color = AppTextGrey
+                )
+                if (onViewMap != null) {
+                    TextButton(
+                        onClick = { onViewMap(detail.latitude, detail.longitude) },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Text("📍 ดูบนแผนที่", fontSize = 12.sp, color = AppRed, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
 

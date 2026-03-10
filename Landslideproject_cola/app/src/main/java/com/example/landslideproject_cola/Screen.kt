@@ -52,22 +52,33 @@ sealed class Screen(val route: String, val name: String) {
         name = "การวิเคราะห์และดึงข้อมูล"
     )
 
-    data object AdminVerify : Screen(
-        route = "admin_verify_screen/{logId}",
-        name = "ยืนยันแจ้งเตือน"
-    ) {
-        fun createRoute(logId: String) = "admin_verify_screen/$logId"
-    }
+
 
     data object AdminHome : Screen(
-        route = "admin_home_screen",
+        route = "admin_home_screen?logId={logId}",
         name = "Admin Dashboard"
-    )
+    ) {
+        fun createRoute(logId: String? = null): String {
+            return if (logId != null) {
+                "admin_home_screen?logId=$logId"
+            } else {
+                "admin_home_screen"
+            }
+        }
+    }
 
     data object AdminMap : Screen(
-        route = "admin_map_screen",
+        route = "admin_map_screen?lat={lat}&lon={lon}",
         name = "แผนที่ความเสี่ยง"
-    )
+    ) {
+        fun createRoute(lat: Float? = null, lon: Float? = null): String {
+            return if (lat != null && lon != null) {
+                "admin_map_screen?lat=$lat&lon=$lon"
+            } else {
+                "admin_map_screen"
+            }
+        }
+    }
 
     data object AdminEmergency : Screen(
         route = "admin_emergency_screen",
@@ -76,6 +87,11 @@ sealed class Screen(val route: String, val name: String) {
 
     data object AdminNotificationHistory : Screen(
         route = "admin_notification_history_screen",
+        name = "ประวัติการยืนยัน"
+    )
+
+    data object AdminSentNotificationHistory : Screen(
+        route = "admin_sent_notification_history_screen",
         name = "ประวัติการแจ้งเตือน"
     )
 

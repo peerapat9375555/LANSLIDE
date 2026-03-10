@@ -20,28 +20,24 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 
 @Composable
-fun AdminNotificationHistoryScreen(navController: NavHostController, viewModel: EarthquakeViewModel) {
+fun AdminSentNotificationHistoryScreen(navController: NavHostController, viewModel: EarthquakeViewModel) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
-
-    LaunchedEffect(Unit) {
-        viewModel.getAlertHistory()
-    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = { AdminDrawer(navController = navController, onClose = { scope.launch { drawerState.close() } }) }
     ) {
         Scaffold(
-            topBar = { AdminTopBar(title = "ประวัติการยืนยัน", onMenuClick = { scope.launch { drawerState.open() } }) },
+            topBar = { AdminTopBar(title = "ประวัติการแจ้งเตือน", onMenuClick = { scope.launch { drawerState.open() } }) },
             bottomBar = { AdminBottomNavigationBar(navController, currentRoute) },
             containerColor = AppGrey
         ) { padding ->
             
             var startDate by remember { mutableStateOf<String?>(null) }
             var endDate by remember { mutableStateOf<String?>(null) }
-            val history = viewModel.alertHistory
+            val history = viewModel.sentNotificationHistory
             val context = LocalContext.current
             
             // Calendar instance for DatePicker
@@ -65,7 +61,7 @@ fun AdminNotificationHistoryScreen(navController: NavHostController, viewModel: 
             )
 
             LaunchedEffect(startDate, endDate) {
-                viewModel.getAlertHistory(startDate, endDate)
+                viewModel.getSentNotificationHistory(startDate, endDate)
             }
 
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -96,7 +92,6 @@ fun AdminNotificationHistoryScreen(navController: NavHostController, viewModel: 
                             Text(dateText, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppTextDark)
                         }
                         
-                        // Simple pre-defined filters for now to avoid complex DatePicker setup issues
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (startDate != null || endDate != null) {
                                 TextButton(onClick = { 
@@ -130,49 +125,44 @@ fun AdminNotificationHistoryScreen(navController: NavHostController, viewModel: 
 
                 if (history.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                        Text("ยังไม่มีประวัติการยืนยัน", fontSize = 16.sp, color = AppTextGrey)
+                        Text("ยังไม่มีประวัติการแจ้งเตือน", fontSize = 16.sp, color = AppTextGrey)
                     }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 12.dp)
-                ) {
-                    items(history) { alert ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            onClick = {
-                                viewModel.currentDashboardLogId = alert.log_id
-                                navController.navigate(Screen.AdminHome.createRoute()) {
-                                    popUpTo(Screen.AdminHome.route) { inclusive = false }
-                                }
-                            },
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            elevation = CardDefaults.cardElevation(2.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    val (iconText, statusText, statusColor) = when(alert.status) {
-                                        "approved" -> Triple("✅ ", "ยืนยันแล้ว", AppGreen)
-                                        "rejected" -> Triple("❌ ", "ปฏิเสธ", AppRed)
-                                        else -> Triple("⏳ ", "หมดอายุ (ไม่ได้ตรวจสอบ)", Color.Gray)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(vertical = 12.dp)
+                    ) {
+                        items(history) { alert ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                onClick = {
+                                    viewModel.currentDashboardLogId = alert.log_id
+                                    navController.navigate(Screen.AdminHome.createRoute()) {
+                                        popUpTo(Screen.AdminHome.route) { inclusive = false }
                                     }
-                                    Text(iconText, fontSize = 18.sp)
-                                    Text(statusText, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = statusColor)
-                                    Spacer(modifier = Modifier.weight(1f))
-                                    val riskColor = when (alert.risk_level) { "High" -> Color.Red; "Medium" -> Color(0xFFFF9800); else -> AppGreen }
-                                    Text(alert.risk_level, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = riskColor)
+                                },
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                elevation = CardDefaults.cardElevation(2.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("✅ ", fontSize = 18.sp)
+                                        Text("ส่งการแจ้งเตือนสำเร็จ", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AppGreen)
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        val riskColor = when (alert.risk_level) { "High" -> Color.Red; "Medium" -> Color(0xFFFF9800); else -> AppGreen }
+                                        Text(alert.risk_level, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = riskColor)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("ต.${alert.tambon ?: "-"} อ.${alert.district ?: "-"}", fontSize = 13.sp, color = AppTextDark)
+                                    Text("ความน่าจะเป็น: ${String.format("%.1f", alert.probability * 100)}%", fontSize = 12.sp, color = AppTextGrey)
+                                    Text("เวลา: ${alert.timestamp ?: "-"}", fontSize = 11.sp, color = AppTextGrey)
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text("ต.${alert.tambon ?: "-"} อ.${alert.district ?: "-"}", fontSize = 13.sp, color = AppTextDark)
-                                Text("ความน่าจะเป็น: ${String.format("%.1f", alert.probability * 100)}%", fontSize = 12.sp, color = AppTextGrey)
-                                Text("เวลา: ${alert.timestamp ?: "-"}", fontSize = 11.sp, color = AppTextGrey)
                             }
                         }
                     }
                 }
-            }
             }
         }
     }

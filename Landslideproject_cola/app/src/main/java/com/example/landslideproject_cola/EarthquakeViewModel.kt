@@ -39,6 +39,13 @@ class EarthquakeViewModel : ViewModel() {
     var adminAlertDetail by mutableStateOf<AdminAlertDetail?>(null)
         private set
 
+    // Track which logId the admin is viewing on the Dashboard
+    var currentDashboardLogId by mutableStateOf<String?>(null)
+
+    fun setDashboardLogId(logId: String?) {
+        currentDashboardLogId = logId
+    }
+
     var alertHistory by mutableStateOf<List<PendingAlert>>(emptyList())
         private set
 
@@ -481,12 +488,27 @@ class EarthquakeViewModel : ViewModel() {
     }
 
     // ================= ADMIN: GET ALERT HISTORY =================
-    fun getAlertHistory() {
+    fun getAlertHistory(startDate: String? = null, endDate: String? = null) {
         viewModelScope.launch {
             try {
-                val response = EarthquakeClient.earthquakeAPI.getAlertHistory()
+                val response = EarthquakeClient.earthquakeAPI.getAlertHistory(startDate, endDate)
                 if (response.isSuccessful) {
                     alertHistory = response.body() ?: emptyList()
+                }
+            } catch (e: Exception) {}
+        }
+    }
+
+    var sentNotificationHistory by mutableStateOf<List<PendingAlert>>(emptyList())
+        private set
+
+    // ================= ADMIN: GET SENT NOTIFICATION HISTORY =================
+    fun getSentNotificationHistory(startDate: String? = null, endDate: String? = null) {
+        viewModelScope.launch {
+            try {
+                val response = EarthquakeClient.earthquakeAPI.getSentNotificationHistory(startDate, endDate)
+                if (response.isSuccessful) {
+                    sentNotificationHistory = response.body() ?: emptyList()
                 }
             } catch (e: Exception) {}
         }

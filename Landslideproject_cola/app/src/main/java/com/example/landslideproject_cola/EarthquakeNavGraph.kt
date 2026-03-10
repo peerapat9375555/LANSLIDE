@@ -50,14 +50,40 @@ fun EarthquakeNavGraph(navController: NavHostController) {
             ProfileScreen(navController, viewModel)
         }
         // ===== ADMIN SCREENS =====
-        composable(Screen.AdminHome.route) {
-            AdminHomeScreen(navController, viewModel)
+        composable(
+            route = Screen.AdminHome.route,
+            arguments = listOf(
+                androidx.navigation.navArgument("logId") {
+                    type = androidx.navigation.NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val logId = backStackEntry.arguments?.getString("logId")
+            AdminHomeScreen(navController, viewModel, logId)
         }
         composable(Screen.AdminAlerts.route) {
             AdminAlertsScreen(navController, viewModel)
         }
-        composable(Screen.AdminMap.route) {
-            AdminMapScreen(navController, viewModel)
+        composable(
+            route = Screen.AdminMap.route,
+            arguments = listOf(
+                androidx.navigation.navArgument("lat") {
+                    type = androidx.navigation.NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                androidx.navigation.navArgument("lon") {
+                    type = androidx.navigation.NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val lat = backStackEntry.arguments?.getString("lat")?.toFloatOrNull()
+            val lon = backStackEntry.arguments?.getString("lon")?.toFloatOrNull()
+            AdminMapScreen(navController, viewModel, lat, lon)
         }
         composable(Screen.AdminAnalysis.route) {
             AdminAnalysisScreen(navController, viewModel)
@@ -68,10 +94,10 @@ fun EarthquakeNavGraph(navController: NavHostController) {
         composable(Screen.AdminNotificationHistory.route) {
             AdminNotificationHistoryScreen(navController, viewModel)
         }
-        composable(Screen.AdminVerify.route) { backStackEntry ->
-            val logId = backStackEntry.arguments?.getString("logId") ?: ""
-            AdminVerifyScreen(navController, viewModel, logId)
+        composable(Screen.AdminSentNotificationHistory.route) {
+            AdminSentNotificationHistoryScreen(navController, viewModel)
         }
+
         composable(Screen.PinDashboard.route) { backStackEntry ->
             val pinId = backStackEntry.arguments?.getString("pinId") ?: ""
             PinDashboardScreen(navController, viewModel, pinId)

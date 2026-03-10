@@ -125,6 +125,7 @@ data class PendingAlert(
     @SerializedName("node_id") val node_id: Int,
     @SerializedName("risk_level") val risk_level: String,
     @SerializedName("probability") val probability: Float,
+    @SerializedName("status") val status: String?,
     @SerializedName("timestamp") val timestamp: String?,
     @SerializedName("latitude") val latitude: Double,
     @SerializedName("longitude") val longitude: Double,

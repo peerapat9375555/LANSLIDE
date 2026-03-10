@@ -19,7 +19,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polygon
 
 @Composable
-fun AdminMapScreen(navController: NavHostController, viewModel: EarthquakeViewModel) {
+fun AdminMapScreen(navController: NavHostController, viewModel: EarthquakeViewModel, targetLat: Float? = null, targetLon: Float? = null) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -47,8 +47,13 @@ fun AdminMapScreen(navController: NavHostController, viewModel: EarthquakeViewMo
                         MapView(ctx).apply {
                             setTileSource(TileSourceFactory.MAPNIK)
                             setMultiTouchControls(true)
-                            controller.setZoom(10.0)
-                            controller.setCenter(GeoPoint(19.0, 100.8))
+                            if (targetLat != null && targetLon != null) {
+                                controller.setZoom(16.0)
+                                controller.setCenter(GeoPoint(targetLat.toDouble(), targetLon.toDouble()))
+                            } else {
+                                controller.setZoom(10.0)
+                                controller.setCenter(GeoPoint(19.0, 100.8))
+                            }
                         }
                     },
                     update = { mapView ->

@@ -68,7 +68,10 @@ interface EarthquakeAPI {
     suspend fun uploadEmergencyImage(@Path("service_id") serviceId: String, @Body data: UploadImageRequest): Response<UploadImageResponse>
 
     @GET("api/admin/alerts/history")
-    suspend fun getAlertHistory(): Response<List<PendingAlert>>
+    suspend fun getAlertHistory(@Query("startDate") startDate: String? = null, @Query("endDate") endDate: String? = null): Response<List<PendingAlert>>
+
+    @GET("api/admin/notifications/history")
+    suspend fun getSentNotificationHistory(@Query("startDate") startDate: String? = null, @Query("endDate") endDate: String? = null): Response<List<PendingAlert>>
 
     // ดึง alerts ที่แอดมินยืนยัน (สำหรับ notification service ตรวจสอบระยะห่าง)
     @GET("api/alerts/verified")

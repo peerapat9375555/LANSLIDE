@@ -16,36 +16,49 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 // ====== Admin Bottom Nav: 3 tabs only ======
 @Composable
 fun AdminBottomNavigationBar(navController: NavHostController, currentRoute: String?) {
+    val isHome = currentRoute?.startsWith("admin_home_screen") == true
+    val isAlerts = currentRoute == Screen.AdminAlerts.route
+    val isMap = currentRoute?.startsWith("admin_map_screen") == true
+
     NavigationBar(containerColor = Color.White, contentColor = AppRed) {
         NavigationBarItem(
             icon = { Icon(Icons.Filled.Home, contentDescription = "Home") },
-            label = { Text("หน้าหลัก", fontSize = 11.sp, color = if (currentRoute == Screen.AdminHome.route) AppRed else Color.Gray) },
-            selected = currentRoute == Screen.AdminHome.route,
+            label = { Text("หน้าหลัก", fontSize = 11.sp, color = if (isHome) AppRed else Color.Gray) },
+            selected = isHome,
             onClick = {
-                if (currentRoute != Screen.AdminHome.route) {
-                    navController.navigate(Screen.AdminHome.route) { popUpTo(Screen.AdminHome.route) { inclusive = true }; launchSingleTop = true }
+                if (!isHome) {
+                    navController.navigate(Screen.AdminHome.createRoute()) {
+                        popUpTo(Screen.AdminHome.route) { inclusive = false }
+                        launchSingleTop = true
+                    }
                 }
             },
             colors = NavigationBarItemDefaults.colors(selectedIconColor = AppRed, unselectedIconColor = Color.Gray, indicatorColor = Color.Transparent)
         )
         NavigationBarItem(
             icon = { Icon(Icons.Filled.Notifications, contentDescription = "Alerts") },
-            label = { Text("แจ้งเตือน", fontSize = 11.sp, color = if (currentRoute == Screen.AdminAlerts.route) AppRed else Color.Gray) },
-            selected = currentRoute == Screen.AdminAlerts.route,
+            label = { Text("แจ้งเตือน", fontSize = 11.sp, color = if (isAlerts) AppRed else Color.Gray) },
+            selected = isAlerts,
             onClick = {
-                if (currentRoute != Screen.AdminAlerts.route) {
-                    navController.navigate(Screen.AdminAlerts.route) { popUpTo(Screen.AdminHome.route); launchSingleTop = true }
+                if (!isAlerts) {
+                    navController.navigate(Screen.AdminAlerts.route) {
+                        popUpTo(Screen.AdminHome.route) { inclusive = false }
+                        launchSingleTop = true
+                    }
                 }
             },
             colors = NavigationBarItemDefaults.colors(selectedIconColor = AppRed, unselectedIconColor = Color.Gray, indicatorColor = Color.Transparent)
         )
         NavigationBarItem(
             icon = { Icon(Icons.Filled.LocationOn, contentDescription = "Map") },
-            label = { Text("แผนที่", fontSize = 11.sp, color = if (currentRoute == Screen.AdminMap.route) AppRed else Color.Gray) },
-            selected = currentRoute == Screen.AdminMap.route,
+            label = { Text("แผนที่", fontSize = 11.sp, color = if (isMap) AppRed else Color.Gray) },
+            selected = isMap,
             onClick = {
-                if (currentRoute != Screen.AdminMap.route) {
-                    navController.navigate(Screen.AdminMap.route) { popUpTo(Screen.AdminHome.route); launchSingleTop = true }
+                if (!isMap) {
+                    navController.navigate(Screen.AdminMap.createRoute()) {
+                        popUpTo(Screen.AdminHome.route) { inclusive = false }
+                        launchSingleTop = true
+                    }
                 }
             },
             colors = NavigationBarItemDefaults.colors(selectedIconColor = AppRed, unselectedIconColor = Color.Gray, indicatorColor = Color.Transparent)
@@ -78,7 +91,8 @@ fun AdminDrawer(navController: NavHostController, onClose: () -> Unit) {
         val items = listOf(
             Triple(Icons.Default.Build, "ดึงข้อมูล GEE / น้ำฝน", Screen.AdminAnalysis),
             Triple(Icons.Default.Phone, "แก้ไขเบอร์ฉุกเฉิน", Screen.AdminEmergency),
-            Triple(Icons.Default.DateRange, "ประวัติการแจ้งเตือน", Screen.AdminNotificationHistory),
+            Triple(Icons.Default.DateRange, "ประวัติการยืนยัน", Screen.AdminNotificationHistory),
+            Triple(Icons.Default.Notifications, "ประวัติการแจ้งเตือน", Screen.AdminSentNotificationHistory),
             Triple(Icons.Default.Inbox, "รายงานจากผู้ใช้", Screen.AdminReports),
             Triple(Icons.Default.History, "ประวัติการช่วยเหลือ", Screen.AdminReportHistory)
         )

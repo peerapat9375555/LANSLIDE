@@ -64,17 +64,11 @@ fun AdminAlertsScreen(
                     items(alerts) { alert ->
                         AdminAlertCard(
                             alert = alert,
-                            onClick = { navController.navigate(Screen.AdminVerify.createRoute(alert.log_id)) },
-                            onApprove = {
-                                viewModel.verifyAlert(context, alert.log_id, "approve") {
-                                    viewModel.getPendingAlerts()
-                                }
+                            onClick = {
+                                viewModel.setDashboardLogId(alert.log_id)
+                                navController.navigate(Screen.AdminHome.createRoute(alert.log_id))
                             },
-                            onReject = {
-                                viewModel.verifyAlert(context, alert.log_id, "reject") {
-                                    viewModel.getPendingAlerts()
-                                }
-                            }
+                            showButtons = false
                         )
                     }
                 }
