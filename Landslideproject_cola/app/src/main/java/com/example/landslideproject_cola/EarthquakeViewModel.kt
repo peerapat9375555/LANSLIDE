@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
@@ -159,45 +160,6 @@ class EarthquakeViewModel : ViewModel() {
                     predictions = response.body() ?: emptyList()
                 } else {
                     errorMessage = "ไม่สามารถโหลดข้อมูลการทำนายได้"
-                }
-            } catch (e: Exception) {
-                errorMessage = "Error: ${e.message}"
-            } finally {
-                isLoading = false
-            }
-        }
-    }
-
-    // ================= ADD PIN =================
-    fun addPin(context: Context, request: PinRequest, onSuccess: () -> Unit = {}) {
-        viewModelScope.launch {
-            try {
-                val response = EarthquakeClient.earthquakeAPI.createPin(request)
-                if (response.isSuccessful) {
-                    Toast.makeText(context, "เพิ่มจุดปักหมุดสำเร็จ", Toast.LENGTH_SHORT).show()
-                    onSuccess()
-                } else {
-                    val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                    android.util.Log.e("UserPins", "Add Pin Failed: $errorBody")
-                    Toast.makeText(context, "ปักหมุดล้มเหลว: $errorBody", Toast.LENGTH_LONG).show()
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("UserPins", "Add Pin Exception", e)
-                Toast.makeText(context, "เกิดข้อผิดพลาด: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    // ================= GET EVENTS =================
-    fun getEvents() {
-        viewModelScope.launch {
-            isLoading = true
-            try {
-                val response = EarthquakeClient.earthquakeAPI.getEvents()
-                if (response.isSuccessful) {
-                    events = response.body() ?: emptyList()
-                } else {
-                    errorMessage = "ไม่สามารถโหลดเหตุการณ์ได้"
                 }
             } catch (e: Exception) {
                 errorMessage = "Error: ${e.message}"
@@ -403,7 +365,7 @@ class EarthquakeViewModel : ViewModel() {
         }
     }
 
-    // ================= ADMIN: UPLOAD EMERGENCY IMAGE =================
+    // ================= UPLOAD EMERGENCY IMAGE =================
     fun uploadEmergencyImage(context: Context, serviceId: String, imageBase64: String, filename: String, onSuccess: (String) -> Unit) {
         viewModelScope.launch {
             isLoading = true
@@ -421,26 +383,6 @@ class EarthquakeViewModel : ViewModel() {
                 Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             } finally {
                 isLoading = false
-            }
-        }
-    }
-
-    // ================= USER PINS: GET PINS =================
-    fun getUserPins(userId: String) {
-        viewModelScope.launch {
-            try {
-                android.util.Log.d("UserPins", "Calling GET /api/user-pins for user: $userId")
-                val response = EarthquakeClient.earthquakeAPI.getUserPins(userId)
-                android.util.Log.d("UserPins", "Response code: ${response.code()}")
-                if (response.isSuccessful) {
-                    userPins = response.body() ?: emptyList()
-                    android.util.Log.d("UserPins", "Successfully loaded ${userPins.size} pins")
-                } else {
-                    val errBody = response.errorBody()?.string()
-                    android.util.Log.e("UserPins", "Error ${response.code()}: $errBody")
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("UserPins", "Exception: ${e.message}", e)
             }
         }
     }
@@ -464,62 +406,6 @@ class EarthquakeViewModel : ViewModel() {
             } catch (e: Exception) {
                 android.util.Log.e("UserLocation", "Exception: ${e.message}", e)
                 userLocation = null
-            }
-        }
-    }
-
-    // ================= USER PINS: CLEAR PINS =================
-    fun clearUserPins(context: Context, userId: String) {
-        viewModelScope.launch {
-            try {
-                val response = EarthquakeClient.earthquakeAPI.clearUserPins(userId)
-                if (response.isSuccessful) {
-                    Toast.makeText(context, "เคลียร์หมุดสำเร็จ", Toast.LENGTH_SHORT).show()
-                    userPins = emptyList() // clear local state
-                    getPredictions() // refresh map to clear pins
-                }
-            } catch (e: Exception) {
-                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    // ================= USER PINS: GET PIN DASHBOARD =================
-    fun getPinDashboard(pinId: String) {
-        viewModelScope.launch {
-            isLoading = true
-            pinDashboard = null
-            try {
-                val response = EarthquakeClient.earthquakeAPI.getPinDashboard(pinId)
-                if (response.isSuccessful) {
-                    pinDashboard = response.body()
-                } else {
-                    errorMessage = "ดึงข้อมูลหมุดไม่สำเร็จ"
-                }
-            } catch (e: Exception) {
-                errorMessage = "Error: ${e.message}"
-            } finally {
-                isLoading = false
-            }
-        }
-    }
-
-    // ================= USER PINS: GET DASHBOARD BY LOCATION =================
-    fun getDashboardByLocation(lat: Double, lon: Double) {
-        viewModelScope.launch {
-            isLoading = true
-            pinDashboard = null
-            try {
-                val response = EarthquakeClient.earthquakeAPI.getDashboardByLocation(lat, lon)
-                if (response.isSuccessful) {
-                    pinDashboard = response.body()
-                } else {
-                    errorMessage = "ดึงข้อมูลพิกัดไม่สำเร็จ"
-                }
-            } catch (e: Exception) {
-                errorMessage = "Error: ${e.message}"
-            } finally {
-                isLoading = false
             }
         }
     }
@@ -692,6 +578,25 @@ class EarthquakeViewModel : ViewModel() {
                 }
             } catch (e: Exception) {
                 errorMessage = "Error: ${e.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    // --- Restore Rain Trend from Location Dashboard ---
+    fun getDashboardByLocation(lat: Double, lon: Double) {
+        viewModelScope.launch {
+            try {
+                isLoading = true
+                val response = EarthquakeClient.earthquakeAPI.getDashboardByLocation(lat, lon)
+                if (response.isSuccessful) {
+                    pinDashboard = response.body()
+                } else {
+                    Log.e("EarthquakeVM", "getDashboardByLocation error: ${response.code()}")
+                }
+            } catch (e: Exception) {
+                Log.e("EarthquakeVM", "getDashboardByLocation failed: ${e.message}")
             } finally {
                 isLoading = false
             }

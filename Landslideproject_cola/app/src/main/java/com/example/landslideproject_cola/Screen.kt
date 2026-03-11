@@ -30,11 +30,6 @@ sealed class Screen(val route: String, val name: String) {
         }
     }
 
-    data object Events : Screen(
-        route = "events_screen",
-        name = "เหตุการณ์"
-    )
-
     data object Notifications : Screen(
         route = "notifications_screen",
         name = "การแจ้งเตือน"
@@ -102,13 +97,6 @@ sealed class Screen(val route: String, val name: String) {
         route = "admin_sent_notification_history_screen",
         name = "ประวัติการแจ้งเตือน"
     )
-
-    data object PinDashboard : Screen(
-        route = "pin_dashboard_screen/{pinId}",
-        name = "กราฟวิเคราะห์น้ำฝนจุดปักหมุด"
-    ) {
-        fun createRoute(pinId: String) = "pin_dashboard_screen/$pinId"
-    }
 
     data object SetLocation : Screen(
         route = "set_location_screen",

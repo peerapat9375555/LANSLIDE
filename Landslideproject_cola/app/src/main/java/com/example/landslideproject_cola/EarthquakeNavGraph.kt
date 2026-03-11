@@ -53,9 +53,6 @@ fun EarthquakeNavGraph(navController: NavHostController) {
             val lon = backStackEntry.arguments?.getString("lon")?.toFloatOrNull()
             PredictionsScreen(navController, viewModel, lat, lon)
         }
-        composable(Screen.Events.route) {
-            EventsScreen(navController, viewModel)
-        }
         composable(Screen.Notifications.route) {
             NotificationsScreen(navController, viewModel)
         }
@@ -114,10 +111,6 @@ fun EarthquakeNavGraph(navController: NavHostController) {
             AdminSentNotificationHistoryScreen(navController, viewModel)
         }
 
-        composable(Screen.PinDashboard.route) { backStackEntry ->
-            val pinId = backStackEntry.arguments?.getString("pinId") ?: ""
-            PinDashboardScreen(navController, viewModel, pinId)
-        }
         composable(Screen.SetLocation.route) {
             SetLocationScreen(navController, viewModel)
         }

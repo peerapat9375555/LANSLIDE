@@ -61,10 +61,6 @@ fun PredictionsScreen(
     LaunchedEffect(Unit) {
         Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", android.content.Context.MODE_PRIVATE))
         viewModel.getPredictions()
-        val userId = sharedPref.getSavedUserId()
-        if (userId.isNotEmpty()) {
-            viewModel.getUserPins(userId)
-        }
     }
 
     // Dialog state for Pinning
@@ -135,13 +131,7 @@ fun PredictionsScreen(
                             val mReceive: MapEventsReceiver = object : MapEventsReceiver {
                                 override fun singleTapConfirmedHelper(p: GeoPoint): Boolean = false
                                 override fun longPressHelper(p: GeoPoint): Boolean {
-                                    if (viewModel.loginResult?.user_id != null) {
-                                        selectedLatLng = p
-                                        showPinDialog = true
-                                    } else {
-                                        Toast.makeText(ctx, "กรุณาล็อกอินเพื่อปักหมุดพื้นที่ส่วนตัว", Toast.LENGTH_SHORT).show()
-                                    }
-                                    return true
+                                    return false
                                 }
                             }
                             overlays.add(MapEventsOverlay(mReceive))
@@ -209,20 +199,6 @@ fun PredictionsScreen(
                             view.overlays.add(marker)
                         }
 
-                        // Draw Existing User Pins
-                        viewModel.userPins.forEach { pin ->
-                            val marker = Marker(view).apply {
-                                position = GeoPoint(pin.latitude, pin.longitude)
-                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                                title = pin.label ?: "จุดปักหมุด"
-                                setOnMarkerClickListener { _, _ ->
-                                    navController.navigate(Screen.PinDashboard.createRoute(pin.pin_id))
-                                    true
-                                }
-                            }
-                            view.overlays.add(marker)
-                        }
-
                         view.invalidate()
                     }
                 )
@@ -263,21 +239,7 @@ fun PredictionsScreen(
                     )
                 }
 
-                // ===== Clear Pins Button =====
-                if (viewModel.userPins.isNotEmpty()) {
-                    FilledTonalButton(
-                        onClick = { viewModel.clearUserPins(context, sharedPref.getSavedUserId()) },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 12.dp, end = 12.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = Color.White,
-                            contentColor = AppRed
-                        )
-                    ) {
-                        Text("ล้างหมุดพื้นที่", fontWeight = FontWeight.Bold)
-                    }
-                }
+                // ===== Clear Pins Button (Removed) =====
 
                 // ===== RIGHT SIDE: Zoom + MyLocation (เหมือน SetLocationScreen) =====
                 Column(
@@ -373,47 +335,6 @@ fun PredictionsScreen(
                 }
             }
 
-            // ===== Pin Confirmation Dialog =====
-            if (showPinDialog && selectedLatLng != null) {
-                AlertDialog(
-                    onDismissRequest = { showPinDialog = false },
-                    title = { Text("ตั้งจุดเตือนภัยส่วนตัว") },
-                    text = {
-                        Column {
-                            Text("คุณต้องการรับการแจ้งเตือนดินถล่มที่จุดนี้ใช่หรือไม่?")
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedTextField(
-                                value = pinLabel,
-                                onValueChange = { pinLabel = it },
-                                label = { Text("ชื่อสถานที่ (เช่น บ้าน, ที่ทำงาน)") }
-                            )
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            val userId = sharedPref.getSavedUserId()
-                            val request = PinRequest(
-                                user_id = userId,
-                                latitude = selectedLatLng!!.latitude,
-                                longitude = selectedLatLng!!.longitude,
-                                label = pinLabel.ifEmpty { "Pinned Location" }
-                            )
-                            viewModel.addPin(context, request) {
-                                viewModel.getUserPins(userId)
-                            }
-                            showPinDialog = false
-                            pinLabel = ""
-                        }) {
-                            Text("บันทึก", color = AppRed, fontWeight = FontWeight.Bold)
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showPinDialog = false }) {
-                            Text("ยกเลิก")
-                        }
-                    }
-                )
-            }
         }
     }
 }

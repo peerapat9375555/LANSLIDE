@@ -26,14 +26,6 @@ interface EarthquakeAPI {
     @POST("trigger-prediction") // For Admin
     suspend fun triggerPrediction(): Response<Map<String, Any>>
 
-    // ---------- PINS ----------
-    @POST("api/pins")
-    suspend fun createPin(@Body data: PinRequest): Response<Map<String, String>>
-
-    // ---------- EVENTS ----------
-    @GET("api/events")
-    suspend fun getEvents(): Response<List<LandslideEvent>>
-
     // ---------- NOTIFICATIONS ----------
     @GET("api/notifications/{user_id}")
     suspend fun getNotifications(@Path("user_id") userId: String): Response<List<NotificationItem>>
@@ -86,25 +78,15 @@ interface EarthquakeAPI {
     @POST("trigger-rain")
     suspend fun triggerRain(): Response<GenericResponse>
 
-    // ---------- PIN DASHBOARD ----------
-    @GET("api/pins/user/{user_id}")
-    suspend fun getUserPins(@Path("user_id") userId: String): Response<List<UserPinResponse>>
-
-    @GET("api/pins/{pin_id}/dashboard")
-    suspend fun getPinDashboard(@Path("pin_id") pinId: String): Response<UserPinDashboard>
-
-    @GET("api/dashboard/by-location")
-    suspend fun getDashboardByLocation(@Query("lat") lat: Double, @Query("lon") lon: Double): Response<UserPinDashboard>
-
-    @DELETE("api/pins/{user_id}")
-    suspend fun clearUserPins(@Path("user_id") userId: String): Response<GenericResponse>
-
     // ---------- USER LOCATION ----------
     @POST("api/user-location/{user_id}")
     suspend fun saveUserLocation(@Path("user_id") userId: String, @Body data: SaveLocationRequest): Response<GenericResponse>
 
     @GET("api/user-location/{user_id}")
     suspend fun getUserLocation(@Path("user_id") userId: String): Response<UserLocationResponse>
+
+    @GET("api/dashboard/by-location")
+    suspend fun getDashboardByLocation(@Query("lat") lat: Double, @Query("lon") lon: Double): Response<UserPinDashboard>
 
     // ---------- USER REPORTS ----------
     @POST("api/reports")

@@ -190,50 +190,6 @@ async def fetch_weather_batch(grids):
         
     return results
 
-# 1. POST /api/pins : Find nearest node_id and insert pin
-@app.post("/api/pins")
-async def create_pin(pin: PinRequest):
-    conn = get_db_connection()
-    if not conn:
-        raise HTTPException(status_code=500, detail="Database connection error")
-        
-    try:
-        cursor = conn.cursor(dictionary=True)
-        # O(1) query finding Euclidean nearest node_id from static_nodes
-        query_node = """
-        SELECT node_id FROM static_nodes 
-        ORDER BY (POW(latitude - %s, 2) + POW(longitude - %s, 2)) ASC 
-        LIMIT 1
-        """
-        cursor.execute(query_node, (pin.latitude, pin.longitude))
-        result = cursor.fetchone()
-        
-        if not result:
-            raise HTTPException(status_code=404, detail="No static geographic nodes found in database")
-            
-        nearest_node_id = result['node_id']
-        pin_id = str(uuid.uuid4())
-        
-        insert_pin = """
-        INSERT INTO user_pinned_locations (pin_id, user_id, latitude, longitude, label, nearest_node_id)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(insert_pin, (pin_id, pin.user_id, pin.latitude, pin.longitude, pin.label, nearest_node_id))
-        conn.commit()
-        
-        return {
-            "status": "success", 
-            "pin_id": pin_id, 
-            "nearest_node_id": nearest_node_id, 
-            "message": "Pinned location mapped to nearest geographic node successfully."
-        }
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        cursor.close()
-        conn.close()
-
 @app.post("/trigger-prediction")
 async def trigger_prediction():
     if STATIC_DATA_CACHE is None or STATIC_DATA_CACHE.empty:
@@ -469,30 +425,6 @@ async def get_user_profile(user_id: str):
         return {"error": False, **user}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        cursor.close()
-        conn.close()
-
-# =============================================================
-# GET LANDSLIDE EVENTS
-# =============================================================
-@app.get("/api/events")
-async def get_events():
-    conn = get_db_connection()
-    if not conn:
-        raise HTTPException(status_code=500, detail="Database connection error")
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM landslide_events ORDER BY occurred_at DESC LIMIT 50")
-        rows = cursor.fetchall()
-        # Convert datetime objects to strings for JSON serialization
-        for row in rows:
-            for key, val in row.items():
-                if isinstance(val, (datetime.datetime, datetime.date)):
-                    row[key] = val.isoformat()
-        return rows
-    except Exception as e:
-        return []
     finally:
         cursor.close()
         conn.close()
@@ -894,21 +826,14 @@ async def verify_alert(log_id: str, payload: VerifyAlertRequest):
                 title = "⚠️ แจ้งเตือนด่วน: พบความเสี่ยงดินถล่ม"
                 msg = f"พื้นที่ ต.{t_name} อ.{d_name} มีความเสี่ยงระดับ {alert['risk_level']} โปรดเฝ้าระวังในรัศมี 20 กม."
 
-                # 3. ค้นหา User ที่ "ปักหมุด" หรือ "ตัวอยู่ที่นั่น" ในระยะ
+                # 3. ค้นหา User ที่ตั้งตำแหน่งอยู่ในระยะ
                 RADIUS_DEGREE = 0.18  # ≈ 20 km
 
                 query_nearby = f"""
-                    SELECT DISTINCT user_id FROM (
-                        SELECT user_id FROM user_pinned_locations 
-                        WHERE (POW(latitude - %s, 2) + POW(longitude - %s, 2)) < POW({RADIUS_DEGREE}, 2)
-                        
-                        UNION
-                        
-                        SELECT user_id FROM user_locations 
-                        WHERE (POW(latitude - %s, 2) + POW(longitude - %s, 2)) < POW({RADIUS_DEGREE}, 2)
-                    ) AS combined_users
+                    SELECT DISTINCT user_id FROM user_locations 
+                    WHERE (POW(latitude - %s, 2) + POW(longitude - %s, 2)) < POW({RADIUS_DEGREE}, 2)
                 """
-                cursor.execute(query_nearby, (lat_a, lon_a, lat_a, lon_a))
+                cursor.execute(query_nearby, (lat_a, lon_a))
                 target_users = cursor.fetchall()
 
                 # 4. เตรียมข้อมูลเพื่อ Insert ลงตาราง notifications
@@ -1487,49 +1412,6 @@ async def get_dashboard_by_location(lat: float, lon: float):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        cursor.close()
-        conn.close()
-
-# =============================================================
-# USER: CLEAR PINS
-# =============================================================
-@app.delete("/api/pins/{user_id}")
-async def clear_user_pins(user_id: str):
-    conn = get_db_connection()
-    if not conn:
-        raise HTTPException(status_code=500, detail="Database connection error")
-    try:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM user_pinned_locations WHERE user_id = %s", (user_id,))
-        deleted_count = cursor.rowcount
-        conn.commit()
-        return {"status": "success", "message": f"Cleared {deleted_count} pins.", "deleted": deleted_count}
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        cursor.close()
-        conn.close()
-
-# =============================================================
-# USER: GET PINS
-# =============================================================
-@app.get("/api/pins/user/{user_id}")
-async def get_user_pins(user_id: str):
-    conn = get_db_connection()
-    if not conn:
-        raise HTTPException(status_code=500, detail="Database connection error")
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT pin_id, latitude, longitude, label FROM user_pinned_locations WHERE user_id = %s", (user_id,))
-        rows = cursor.fetchall()
-        for r in rows:
-            r['latitude'] = float(r['latitude'])
-            r['longitude'] = float(r['longitude'])
-        return rows
-    except Exception as e:
-        return []
     finally:
         cursor.close()
         conn.close()

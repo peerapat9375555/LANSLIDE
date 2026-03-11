@@ -35,33 +35,27 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         viewModel.getPredictions()
-        viewModel.getEvents()
         val userId = sharedPref.getSavedUserId()
         if (userId.isNotEmpty()) {
-            viewModel.getUserPins(userId)
-            viewModel.getUserLocation(userId) // โหลดหมุดจากโปรไฟล์ด้วย
+            viewModel.getUserLocation(userId) // โหลดหมุดจากโปรไฟล์
         }
     }
 
     // 1. หมุดแรกของ user (หาจาก map pins ก่อน ถ้าไม่มีค่อยเอาจาก profile)
-    val userPins = viewModel.userPins
     val userLocation = viewModel.userLocation
     
     // สร้าง object กลางเพื่อใช้งานร่วมกัน
-    val activePinLat = userPins.firstOrNull()?.latitude ?: userLocation?.latitude
-    val activePinLon = userPins.firstOrNull()?.longitude ?: userLocation?.longitude
+    val activePinLat = userLocation?.latitude
+    val activePinLon = userLocation?.longitude
     val hasAnyPin = activePinLat != null && activePinLon != null && (activePinLat != 0.0 || activePinLon != 0.0)
 
-    LaunchedEffect(userPins.size, userLocation) {
-        // Removed Toast
+    LaunchedEffect(userLocation) {
+        // อัปเดตเมื่อมีโลเคชั่น
     }
 
-    // 2. โหลดกราฟน้ำฝน (rain_trend) - รองรับ pin_id หรือ userLocation (ถ้าไม่มี pin)
-    LaunchedEffect(userPins.firstOrNull()?.pin_id, userLocation) {
-        val pinId = userPins.firstOrNull()?.pin_id
-        if (pinId != null) {
-            viewModel.getPinDashboard(pinId)
-        } else if (userLocation != null && userLocation.latitude != null && userLocation.longitude != null) {
+    // 2. โหลดกราฟน้ำฝน (rain_trend) ด้วยพิกัด location (ถ้ามี)
+    LaunchedEffect(userLocation) {
+        if (userLocation?.latitude != null && userLocation?.longitude != null) {
             viewModel.getDashboardByLocation(userLocation.latitude!!, userLocation.longitude!!)
         }
     }
@@ -78,8 +72,6 @@ fun HomeScreen(
             }
         } else null
     }
-
-    val recentEvents = viewModel.events.take(3)
 
     // ====== Drawer + Main ======
     ModalNavigationDrawer(
