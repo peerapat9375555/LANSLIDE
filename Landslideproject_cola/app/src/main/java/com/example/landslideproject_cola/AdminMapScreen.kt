@@ -16,9 +16,13 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polygon
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
 
 @Composable
 fun AdminMapScreen(navController: NavHostController, viewModel: EarthquakeViewModel, targetLat: Float? = null, targetLon: Float? = null) {
@@ -37,6 +41,11 @@ fun AdminMapScreen(navController: NavHostController, viewModel: EarthquakeViewMo
     var showHighRisk by remember { mutableStateOf(true) }
     var showMediumRisk by remember { mutableStateOf(true) }
     var showLowRisk by remember { mutableStateOf(true) }
+
+    // Map Style State: 0 = Default, 1 = Satellite, 2 = Terrain
+    var mapStyleIndex by remember { mutableIntStateOf(0) }
+    val mapStyleLabels = listOf("🗺️ ปกติ", "🛰️ ดาวเทียม", "🏔️ ภูมิประเทศ")
+    var showStyleMenu by remember { mutableStateOf(false) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -64,6 +73,29 @@ fun AdminMapScreen(navController: NavHostController, viewModel: EarthquakeViewMo
                         }
                     },
                     update = { mapView ->
+                        // Apply map tile source based on style selection
+                        val newTileSource = when (mapStyleIndex) {
+                            1 -> object : OnlineTileSourceBase(
+                                "EsriWorldImagery", 0, 18, 256, ".jpg",
+                                arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/")
+                            ) {
+                                override fun getTileURLString(pMapTileIndex: Long): String {
+                                    val zoom = org.osmdroid.util.MapTileIndex.getZoom(pMapTileIndex)
+                                    val x = org.osmdroid.util.MapTileIndex.getX(pMapTileIndex)
+                                    val y = org.osmdroid.util.MapTileIndex.getY(pMapTileIndex)
+                                    return "${baseUrl}$zoom/$y/$x"
+                                }
+                            }
+                            2 -> XYTileSource(
+                                "OpenTopoMap", 0, 17, 256, ".png",
+                                arrayOf("https://a.tile.opentopomap.org/", "https://b.tile.opentopomap.org/")
+                            )
+                            else -> TileSourceFactory.MAPNIK
+                        }
+                        if (mapView.tileProvider.tileSource != newTileSource) {
+                            mapView.setTileSource(newTileSource)
+                        }
+
                         mapView.overlays.clear()
                         predictions.filter { item ->
                             val isHigh = item.risk_level == "High"
@@ -113,6 +145,37 @@ fun AdminMapScreen(navController: NavHostController, viewModel: EarthquakeViewMo
                             Checkbox(checked = showLowRisk, onCheckedChange = { showLowRisk = it }, modifier = Modifier.size(24.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("ต่ำ (Low)", fontSize = 12.sp, color = Color(0xFF4CAF50))
+                        }
+                    }
+                }
+
+                // ===== Map Style Switcher =====
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 16.dp)
+                ) {
+                    SmallFloatingActionButton(
+                        onClick = { showStyleMenu = !showStyleMenu },
+                        shape = RoundedCornerShape(8.dp),
+                        containerColor = Color.White,
+                        contentColor = AppTextDark,
+                        elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                    ) {
+                        Text(mapStyleLabels[mapStyleIndex].take(2), fontSize = 16.sp)
+                    }
+                    DropdownMenu(
+                        expanded = showStyleMenu,
+                        onDismissRequest = { showStyleMenu = false }
+                    ) {
+                        mapStyleLabels.forEachIndexed { index, label ->
+                            DropdownMenuItem(
+                                text = { Text(label, fontSize = 14.sp, fontWeight = if (index == mapStyleIndex) FontWeight.Bold else FontWeight.Normal) },
+                                onClick = {
+                                    mapStyleIndex = index
+                                    showStyleMenu = false
+                                }
+                            )
                         }
                     }
                 }
