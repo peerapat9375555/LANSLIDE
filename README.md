@@ -34,20 +34,24 @@
 ```
 Project_mobile_app/
 ├── Landslideproject_cola/          # Android App (Kotlin + Jetpack Compose)
-├── server/
-│   ├── main.py                     # Backend API หลัก (FastAPI)
+├── server/                         # Backend API หลัก (FastAPI)
+│   ├── main.py                     
 │   ├── seed_data.py                # Seed ข้อมูลเริ่มต้น + สร้าง Admin
 │   ├── requirements.txt            # Python dependencies
 │   ├── prepare_static_data.py      # ดึง GEE data แบบ standalone
-│   ├── fix_db.py                   # Script ซ่อม DB
-│   └── debug_db.py                 # Script debug DB
-├── gee_extractor.py                # ดึงข้อมูลจาก Google Earth Engine
-├── modifier_data.py                # แปลงค่า features ก่อนเข้า model
-├── retrain_model.py                # เทรน ML model ใหม่
-├── nan_province_data.csv           # พิกัด 2,727 จุดในจังหวัดน่าน
-├── landsnot_db.sql                 # SQL สร้างโครงสร้างฐานข้อมูลทั้งหมด
-├── best_ml_model.pkl               # ML Model (Random Forest) ที่เทรนแล้ว
-├── .env                            # ⚠️ ห้ามอัพ Git! (GEE Project ID)
+│   └── data/                       # ข้อมูลที่ cache ไว้ (latest_predictions.json)
+├── ml_pipeline/                    # ระบบ Machine Learning และการดึงข้อมูล
+│   ├── gee_extractor.py            # สคริปต์ดึงข้อมูล GEE
+│   ├── modifier_data.py            # สคริปต์แปลงค่า features ก่อนเข้าโมเดล
+│   ├── retrain_model.py            # สคริปต์เทรนโมเดล ML ใหม่
+│   ├── models/                     # ไฟล์โมเดลที่เซฟไว้ (.pkl)
+│   └── data/                       # ไฟล์พิกัด 2,727 จุด (.csv)
+├── database/                       # จัดการฐานข้อมูล (Database)
+│   ├── init_database.sql           # SQL สร้างตารางข้อมูลทั้งหมด
+    └── scripts/                    # เครื่องมือจัดการ DB (fix_db.py, etc)
+├── docs/                           # เอกสารโครงการ สไลด์นำเสนอ
+├── archive/                        # ไฟล์โค้ดเก่า Database สำรองที่ไม่ได้ใช้งานแล้ว
+├── .env                            # ⚠️ ห้ามอัพ Git! (GEE Project ID, DB Config)
 └── .gitignore
 ```
 
