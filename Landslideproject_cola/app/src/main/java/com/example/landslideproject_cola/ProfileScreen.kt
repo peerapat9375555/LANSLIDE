@@ -48,6 +48,7 @@ fun ProfileScreen(
     var phone     by rememberSaveable { mutableStateOf("") }
     var password  by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    var isUpdating by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(profile) {
         profile?.let {
@@ -120,6 +121,7 @@ fun ProfileScreen(
                     onValueChange = { email = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    enabled = false,
                     shape = RoundedCornerShape(8.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -166,30 +168,32 @@ fun ProfileScreen(
 
                 // แก้ไข Button
                 Button(
-                    onClick = { /* TODO: call update API */ },
+                    onClick = {
+                        isUpdating = true
+                        val newName = if (firstName.isNotBlank() || lastName.isNotBlank()) "$firstName $lastName".trim() else profile?.name
+                        val request = UpdateProfileRequest(
+                            name = newName,
+                            phone = phone.ifBlank { profile?.phone },
+                            password = password.ifBlank { null }
+                        )
+                        viewModel.updateProfile(context, savedId, request) {
+                            isUpdating = false
+                            password = "" // clear upon success
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AppRed)
+                    colors = ButtonDefaults.buttonColors(containerColor = AppRed),
+                    enabled = !isUpdating
                 ) {
-                    Text("แก้ไข", color = AppWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    if (isUpdating) {
+                        CircularProgressIndicator(color = AppWhite, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("แก้ไข", color = AppWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-
-                // ปักหมุดที่อยู่
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = { navController.navigate(Screen.SetLocation.route) },
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AppGreen)
-                ) {
-                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = AppGreen)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("ปักหมุดที่อยู่ของฉัน", fontSize = 15.sp, color = AppGreen)
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
 
                 // Logout
                 OutlinedButton(

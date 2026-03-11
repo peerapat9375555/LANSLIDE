@@ -33,10 +33,14 @@ fun NotificationsScreen(
     val scope = rememberCoroutineScope()
     var searchQuery by remember { mutableStateOf("") }
 
+    val tabs = listOf("ส่วนตัว", "ประวัติยืนยัน")
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+
     LaunchedEffect(Unit) {
         if (userId.isNotEmpty()) {
             viewModel.getNotifications(userId)
         }
+        viewModel.getAlertHistory()
     }
 
     val notifications = viewModel.notifications
@@ -63,7 +67,7 @@ fun NotificationsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
-                    placeholder = { Text("ค้นหาการแจ้งเตือน") },
+                    placeholder = { Text("ค้นหา...") },
                     shape = RoundedCornerShape(24.dp),
                     leadingIcon = {
                         Icon(Icons.Default.Search, null, tint = AppTextGrey)
@@ -76,15 +80,17 @@ fun NotificationsScreen(
                     )
                 )
 
-                if (notifications.isEmpty()) {
+                val history = viewModel.alertHistory
+                if (history.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("ไม่มีการแจ้งเตือนในขณะนี้", color = AppTextGrey, fontSize = 16.sp)
                     }
                 } else {
-                    val filtered = notifications.filter {
+                    val filtered = history.filter {
                         searchQuery.isEmpty() ||
-                                it.title.contains(searchQuery, ignoreCase = true) ||
-                                it.message.contains(searchQuery, ignoreCase = true)
+                        (it.district?.contains(searchQuery, ignoreCase = true) == true) ||
+                        (it.tambon?.contains(searchQuery, ignoreCase = true) == true) ||
+                        (it.risk_level.contains(searchQuery, ignoreCase = true))
                     }
 
                     if (filtered.isEmpty()) {
@@ -94,23 +100,38 @@ fun NotificationsScreen(
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                            contentPadding = PaddingValues(bottom = 16.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(bottom = 16.dp, top = 8.dp)
                         ) {
-                            items(filtered) { notif ->
-                                NotificationItemCard(
-                                    notification = notif,
-                                    onClick = {
-                                        // 1. Mark as read
-                                        viewModel.markRead(notif.notification_id, userId)
-
-                                        // 2. Navigate to detail screen if log_id exists
-                                        val logId = notif.log_id
-                                        if (logId != null && logId.isNotEmpty()) {
-                                            navController.navigate(Screen.UserAlertDetail.createRoute(logId))
+                            items(filtered) { alert ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        if (alert.latitude != null && alert.longitude != null) {
+                                            navController.navigate(Screen.Predictions.createRoute(alert.latitude.toFloat(), alert.longitude.toFloat()))
                                         }
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    elevation = CardDefaults.cardElevation(2.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("✅ ", fontSize = 18.sp)
+                                            Text("แจ้งเตือนแล้ว", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AppGreen)
+                                            Spacer(modifier = Modifier.weight(1f))
+                                            val riskColor = when (alert.risk_level) { 
+                                                "High" -> Color.Red; 
+                                                "Medium" -> Color(0xFFFF9800); 
+                                                else -> AppGreen 
+                                            }
+                                            Text(alert.risk_level, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = riskColor)
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("ต.${alert.tambon ?: "-"} อ.${alert.district ?: "-"}", fontSize = 13.sp, color = AppTextDark)
+                                        Text("ความน่าจะเป็น: ${String.format("%.1f", alert.probability * 100)}%", fontSize = 12.sp, color = AppTextGrey)
+                                        Text("เวลา: ${alert.timestamp ?: "-"}", fontSize = 11.sp, color = AppTextGrey)
                                     }
-                                )
+                                }
                             }
                         }
                     }
@@ -163,6 +184,6 @@ fun NotificationItemCard(notification: NotificationItem, onClick: () -> Unit) {
             }
         }
         Spacer(modifier = Modifier.height(12.dp))
-        Divider(color = Color.LightGray.copy(alpha = 0.4f), thickness = 0.5.dp)
+        HorizontalDivider(color = Color.LightGray.copy(alpha = 0.4f), thickness = 0.5.dp)
     }
 }

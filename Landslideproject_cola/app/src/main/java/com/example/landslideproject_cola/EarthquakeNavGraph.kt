@@ -34,8 +34,24 @@ fun EarthquakeNavGraph(navController: NavHostController) {
         composable(Screen.Home.route) {
             HomeScreen(navController, viewModel)
         }
-        composable(Screen.Predictions.route) {
-            PredictionsScreen(navController, viewModel)
+        composable(
+            route = Screen.Predictions.route,
+            arguments = listOf(
+                androidx.navigation.navArgument("lat") {
+                    type = androidx.navigation.NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                androidx.navigation.navArgument("lon") {
+                    type = androidx.navigation.NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val lat = backStackEntry.arguments?.getString("lat")?.toFloatOrNull()
+            val lon = backStackEntry.arguments?.getString("lon")?.toFloatOrNull()
+            PredictionsScreen(navController, viewModel, lat, lon)
         }
         composable(Screen.Events.route) {
             EventsScreen(navController, viewModel)

@@ -13,6 +13,12 @@ data class LoginResponse(
     @SerializedName("role") val role: String?
 )
 
+data class UpdateProfileRequest(
+    @SerializedName("name") val name: String?,
+    @SerializedName("phone") val phone: String?,
+    @SerializedName("password") val password: String?
+)
+
 data class RegisterRequest(
     @SerializedName("name") val name: String,
     @SerializedName("email") val email: String,

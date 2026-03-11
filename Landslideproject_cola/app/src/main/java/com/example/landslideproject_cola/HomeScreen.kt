@@ -1,6 +1,7 @@
 package com.example.landslideproject_cola
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,7 +37,6 @@ fun HomeScreen(
         viewModel.getPredictions()
         viewModel.getEvents()
         val userId = sharedPref.getSavedUserId()
-        Toast.makeText(context, "Debug ID: '$userId'", android.widget.Toast.LENGTH_SHORT).show()
         if (userId.isNotEmpty()) {
             viewModel.getUserPins(userId)
             viewModel.getUserLocation(userId) // โหลดหมุดจากโปรไฟล์ด้วย
@@ -50,17 +50,20 @@ fun HomeScreen(
     // สร้าง object กลางเพื่อใช้งานร่วมกัน
     val activePinLat = userPins.firstOrNull()?.latitude ?: userLocation?.latitude
     val activePinLon = userPins.firstOrNull()?.longitude ?: userLocation?.longitude
-    val hasAnyPin = activePinLat != null && activePinLon != null
+    val hasAnyPin = activePinLat != null && activePinLon != null && (activePinLat != 0.0 || activePinLon != 0.0)
 
     LaunchedEffect(userPins.size, userLocation) {
-        if (userPins.isNotEmpty() || userLocation != null) {
-            Toast.makeText(context, "โหลดข้อมูลหมุด/ตำแหน่งสำเร็จ", android.widget.Toast.LENGTH_SHORT).show()
-        }
+        // Removed Toast
     }
 
-    // 2. โหลดกราฟน้ำฝน (rain_trend) - ตอนนี้ getPinDashboard รองรับแค่ pin_id จากแผนที่
-    LaunchedEffect(userPins.firstOrNull()?.pin_id) {
-        userPins.firstOrNull()?.pin_id?.let { viewModel.getPinDashboard(it) }
+    // 2. โหลดกราฟน้ำฝน (rain_trend) - รองรับ pin_id หรือ userLocation (ถ้าไม่มี pin)
+    LaunchedEffect(userPins.firstOrNull()?.pin_id, userLocation) {
+        val pinId = userPins.firstOrNull()?.pin_id
+        if (pinId != null) {
+            viewModel.getPinDashboard(pinId)
+        } else if (userLocation != null && userLocation.latitude != null && userLocation.longitude != null) {
+            viewModel.getDashboardByLocation(userLocation.latitude!!, userLocation.longitude!!)
+        }
     }
     val pinDashboard = viewModel.pinDashboard
 
@@ -113,7 +116,9 @@ fun HomeScreen(
                         pinData = pinDashboard,
                         userLocation = userLocation,
                         fallbackLat = activePinLat ?: 0.0,
-                        fallbackLon = activePinLon ?: 0.0
+                        fallbackLon = activePinLon ?: 0.0,
+                        hasValidPin = hasAnyPin,
+                        navController = navController
                     )
                 } else {
                     Card(
@@ -145,73 +150,135 @@ fun NearbyAlertSection(
     pinData: UserPinDashboard?,
     userLocation: UserLocationData?,
     fallbackLat: Double,
-    fallbackLon: Double
+    fallbackLon: Double,
+    hasValidPin: Boolean,
+    navController: NavHostController
 ) {
-    val riskColor = when (prediction?.risk_level) {
-        "High"   -> Color(0xFFE53935)
-        "Medium" -> Color(0xFFFF9800)
-        "Low"    -> AppGreen
-        else     -> AppTextGrey
+    val riskColor = when {
+        !hasValidPin -> AppTextGrey
+        prediction?.risk_level == "High" -> Color(0xFFE53935)
+        prediction?.risk_level == "Medium" -> Color(0xFFFF9800)
+        prediction?.risk_level == "Low" -> AppGreen
+        else -> AppGreen
     }
-    val riskLabel = when (prediction?.risk_level) {
-        "High"   -> "สูง"
-        "Medium" -> "ปานกลาง"
-        "Low"    -> "ต่ำ"
-        else     -> "-"
+    val riskLabel = when {
+        !hasValidPin -> "รอระบุพิกัด"
+        prediction?.risk_level == "High" -> "สูง"
+        prediction?.risk_level == "Medium" -> "ปานกลาง"
+        prediction?.risk_level == "Low" -> "ต่ำ"
+        else -> "ต่ำ (ปลอดภัย)"
     }
 
-    val displayTambon = pinData?.label?.substringBefore(" ") ?: userLocation?.tambon ?: "อิงพิกัด"
-    val displayDistrict = userLocation?.district ?: "-"
+    val displayTambon = pinData?.label?.substringBefore(" ") ?: userLocation?.tambon ?: "ไม่ได้ระบุตำบล"
+    val displayDistrict = userLocation?.district ?: "ไม่ได้ระบุอำเภอ"
 
-    // ---- ข้อมูลพื้นที่ Card ----
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = AppWhite),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("📍 ", fontSize = 16.sp)
-                Text(
-                    "ข้อมูลพื้นที่",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = AppTextDark
-                )
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // ---- พิกัดของคุณ Card (แยกออกมาด้านบนสุด) ----
+        if (hasValidPin) {
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable {
+                    navController.navigate(Screen.SetLocation.route)
+                },
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = AppWhite),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("📌 ", fontSize = 16.sp)
+                    Column {
+                        Text("พิกัดปัจจุบันของคุณ", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AppTextDark)
+                        Text(
+                            "Lat: ${"%.6f".format(fallbackLat)}, Lon: ${"%.6f".format(fallbackLon)}",
+                            fontSize = 12.sp,
+                            color = AppTextGrey
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text("ปักที่อยู่ของฉัน >", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AppRed)
+                }
             }
-            Divider(color = Color.LightGray)
-            
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("ตำบล", fontSize = 12.sp, color = AppTextGrey)
-                    Text(displayTambon, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = AppTextDark)
+        }
+
+        // ---- ข้อมูลพื้นที่ (Area Info) Card ----
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable {
+                // Navigate to the map centering on the fallback/prediction coords
+                if (hasValidPin) {
+                    val navLat = prediction?.latitude ?: fallbackLat
+                    val navLon = prediction?.longitude ?: fallbackLon
+                    navController.navigate(Screen.Predictions.createRoute(navLat.toFloat(), navLon.toFloat()))
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("อำเภอ", fontSize = 12.sp, color = AppTextGrey)
-                    Text(displayDistrict, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = AppTextDark)
-                }
-            }
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("ระดับความเสี่ยง", fontSize = 12.sp, color = AppTextGrey)
-                    Text(riskLabel, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = riskColor)
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("ความน่าจะเป็น", fontSize = 12.sp, color = AppTextGrey)
+            },
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = AppWhite),
+            elevation = CardDefaults.cardElevation(2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("📍 ", fontSize = 16.sp)
                     Text(
-                        if (prediction != null) "อิงสถิติ AI" else "-", 
+                        "ข้อมูลพื้นที่เสี่ยง (บริเวณใกล้เคียง)",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
                         color = AppTextDark
                     )
                 }
+                HorizontalDivider(color = Color.LightGray)
+                
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("ตำบล", fontSize = 12.sp, color = AppTextGrey)
+                        Text(displayTambon, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = AppTextDark)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("อำเภอ", fontSize = 12.sp, color = AppTextGrey)
+                        Text(displayDistrict, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = AppTextDark)
+                    }
+                }
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("ระดับความเสี่ยง", fontSize = 12.sp, color = AppTextGrey)
+                        Text(riskLabel, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = riskColor)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("ความน่าจะเป็น", fontSize = 12.sp, color = AppTextGrey)
+                        Text(
+                            if (!hasValidPin) "-"
+                            else if (prediction != null) "อิงสถิติ AI" 
+                            else "พื้นที่ปกติ", 
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = AppTextDark
+                        )
+                    }
+                }
+                
+                if (hasValidPin) {
+                    if (prediction != null) {
+                        Text(
+                            "อ้างอิงจุดเสี่ยง AI: ${"%.6f".format(prediction.latitude)}, ${"%.6f".format(prediction.longitude)}",
+                            fontSize = 11.sp,
+                            color = AppRed.copy(alpha = 0.8f)
+                        )
+                    } else {
+                        Text(
+                            "ไม่พบจุดเสี่ยงในบริเวณนี้ ยึดตามพิกัดของคุณ",
+                            fontSize = 11.sp,
+                            color = AppTextGrey
+                        )
+                    }
+                } else {
+                    Text(
+                        "⚠️ ระบบไม่พบพิกัด กรุณาตั้งค่าตำแหน่งในหน้าโปรไฟล์",
+                        fontSize = 11.sp,
+                        color = AppRed,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
-            Text(
-                "Lat: ${"%.6f".format(prediction?.latitude ?: fallbackLat)}, Lon: ${"%.6f".format(prediction?.longitude ?: fallbackLon)}",
-                fontSize = 11.sp,
-                color = AppTextGrey
-            )
         }
     }
 
@@ -368,9 +435,6 @@ fun AppDrawer(navController: NavHostController, onClose: () -> Unit) {
         Spacer(modifier = Modifier.height(24.dp))
 
         val items = listOf(
-            Triple(Icons.Default.Home,          "Dashboard",          Screen.Home),
-            Triple(Icons.Default.LocationOn,    "Map",                Screen.Events),
-            Triple(Icons.Default.Notifications, "แจ้งเตือนดินถล่ม",  Screen.Notifications),
             Triple(Icons.Default.ReportProblem, "ขอความช่วยเหลือ",   Screen.UserReport),
             Triple(Icons.Default.Person,        "แก้ไขข้อมูลผู้ใช้", Screen.Profile),
             Triple(Icons.Default.Phone,         "เบอร์โทรฉุกเฉิน",   Screen.Emergency)
@@ -389,7 +453,7 @@ fun AppDrawer(navController: NavHostController, onClose: () -> Unit) {
             )
             // ขีดคั่นระหว่าง item (ยกเว้น item สุดท้าย)
             if (index < items.lastIndex) {
-                Divider(
+                HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
                     color = Color(0xFFBBBBBB),
                     thickness = 1.dp
@@ -400,7 +464,7 @@ fun AppDrawer(navController: NavHostController, onClose: () -> Unit) {
         // ดัน logout ลงล่างสุด
         Spacer(modifier = Modifier.weight(1f))
 
-        Divider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.LightGray)
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.LightGray)
         Spacer(modifier = Modifier.height(8.dp))
 
         // ====== ปุ่ม Logout สีแดง ======

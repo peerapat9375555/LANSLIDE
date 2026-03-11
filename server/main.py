@@ -88,6 +88,9 @@ class LoginRequest(BaseModel):
 
 class PredictionResponseItem(BaseModel):
     id: str
+    latitude: float
+    longitude: float
+    risk_level: str
     polygon: List[List[float]]
     color: str
 
@@ -551,6 +554,57 @@ async def get_emergency_services():
         return rows
     except Exception as e:
         return []
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# UPDATE USER PROFILE
+# =============================================================
+class UpdateProfileRequest(BaseModel):
+    name: str = None
+    phone: str = None
+    password: str = None
+
+@app.put("/api/user/{user_id}")
+async def update_user_profile(user_id: str, request: UpdateProfileRequest):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor()
+        
+        updates = []
+        params = []
+        
+        if request.name is not None:
+            updates.append("name = %s")
+            params.append(request.name)
+            
+        if request.phone is not None:
+            updates.append("phone = %s")
+            params.append(request.phone)
+            
+        if request.password is not None and request.password.strip() != "":
+            # Hash new password
+            import bcrypt
+            hashed = bcrypt.hashpw(request.password.encode('utf-8'), bcrypt.gensalt())
+            updates.append("password_hash = %s")
+            params.append(hashed.decode('utf-8'))
+            
+        if not updates:
+            return {"message": "No fields to update"}
+            
+        params.append(user_id)
+        
+        query = f"UPDATE users SET {', '.join(updates)} WHERE user_id = %s"
+        cursor.execute(query, params)
+        conn.commit()
+            
+        return {"message": "Profile updated successfully"}
+    except Exception as e:
+        print(f"Update profile error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
         conn.close()
@@ -1389,6 +1443,46 @@ async def get_pin_dashboard(pin_id: str):
             "label": row['label'],
             "latitude": float(row['latitude']),
             "longitude": float(row['longitude']),
+            "rain_trend": rain_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+# =============================================================
+# USER: GET DASHBOARD BY LOCATION (Fallback for User Profile Location)
+# =============================================================
+@app.get("/api/dashboard/by-location")
+async def get_dashboard_by_location(lat: float, lon: float):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection error")
+    try:
+        cursor = conn.cursor(dictionary=True)
+        # Find nearest static node
+        query_node = """
+        SELECT sn.node_id, sn.latitude, sn.longitude, rg.rain_values_json 
+        FROM static_nodes sn
+        LEFT JOIN rain_grids rg ON sn.grid_id = rg.grid_id
+        ORDER BY (POW(sn.latitude - %s, 2) + POW(sn.longitude - %s, 2)) ASC 
+        LIMIT 1
+        """
+        cursor.execute(query_node, (lat, lon))
+        row = cursor.fetchone()
+        
+        rain_data = []
+        if row and row.get('rain_values_json') and isinstance(row['rain_values_json'], str):
+            try:
+                rain_data = json.loads(row['rain_values_json'])
+            except:
+                pass
+                
+        return {
+            "label": "พิกัดปัจจุบัน",
+            "latitude": lat,
+            "longitude": lon,
             "rain_trend": rain_data
         }
     except Exception as e:

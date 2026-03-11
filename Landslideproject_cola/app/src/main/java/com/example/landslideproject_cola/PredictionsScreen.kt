@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
@@ -35,7 +36,9 @@ import org.osmdroid.views.overlay.Polygon as OsmPolygon
 @Composable
 fun PredictionsScreen(
     navController: NavHostController,
-    viewModel: EarthquakeViewModel
+    viewModel: EarthquakeViewModel,
+    targetLat: Float? = null,
+    targetLon: Float? = null
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -45,10 +48,16 @@ fun PredictionsScreen(
     // MapView reference for zoom/location control
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
-    val initialPos = GeoPoint(18.783, 100.783)
+    val initialPos = if (targetLat != null && targetLon != null) {
+        GeoPoint(targetLat.toDouble(), targetLon.toDouble())
+    } else {
+        GeoPoint(18.783, 100.783)
+    }
+
+    val initialZoom = if (targetLat != null && targetLon != null) 16.0 else 9.0
 
     LaunchedEffect(Unit) {
-        Configuration.getInstance().load(context, android.preference.PreferenceManager.getDefaultSharedPreferences(context))
+        Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", android.content.Context.MODE_PRIVATE))
         viewModel.getPredictions()
         val userId = sharedPref.getSavedUserId()
         if (userId.isNotEmpty()) {
@@ -60,6 +69,11 @@ fun PredictionsScreen(
     var showPinDialog by remember { mutableStateOf(false) }
     var selectedLatLng by remember { mutableStateOf<GeoPoint?>(null) }
     var pinLabel by remember { mutableStateOf("") }
+    
+    // Filter State
+    var showHighRisk by remember { mutableStateOf(true) }
+    var showMediumRisk by remember { mutableStateOf(true) }
+    var showLowRisk by remember { mutableStateOf(true) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -82,7 +96,7 @@ fun PredictionsScreen(
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(
-                                Icons.Default.Add,
+                                Icons.Default.Menu,
                                 contentDescription = "เมนู",
                                 tint = Color.White
                             )
@@ -105,7 +119,7 @@ fun PredictionsScreen(
                     factory = { ctx ->
                         MapView(ctx).apply {
                             setTileSource(TileSourceFactory.MAPNIK)
-                            controller.setZoom(9.0)
+                            controller.setZoom(initialZoom)
                             controller.setCenter(initialPos)
                             setMultiTouchControls(true)
                             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
@@ -132,7 +146,13 @@ fun PredictionsScreen(
                         if (eventsOverlay != null) view.overlays.add(eventsOverlay)
 
                         // Draw Risk Polygons
-                        predictions.forEach { item ->
+                        predictions.filter { item ->
+                            val isHigh = item.risk_level == "High"
+                            val isMedium = item.risk_level == "Medium"
+                            val isLow = item.risk_level == "Low"
+                            
+                            (isHigh && showHighRisk) || (isMedium && showMediumRisk) || (isLow && showLowRisk) || (!isHigh && !isMedium && !isLow)
+                        }.forEach { item ->
                             val polyPoints = item.polygon.map { GeoPoint(it[0], it[1]) }
                             val fillColorHex = try {
                                 android.graphics.Color.parseColor(item.color)
@@ -141,9 +161,9 @@ fun PredictionsScreen(
 
                             val polygon = OsmPolygon().apply {
                                 points = polyPoints
-                                fillColor = transparentFill
-                                strokeColor = fillColorHex
-                                strokeWidth = 2f
+                                fillPaint.color = transparentFill
+                                outlinePaint.color = fillColorHex
+                                outlinePaint.strokeWidth = 2f
                             }
                             view.overlays.add(polygon)
                         }
@@ -175,6 +195,34 @@ fun PredictionsScreen(
                         view.invalidate()
                     }
                 )
+
+                // ===== Filters Overlay =====
+                Card(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)),
+                    elevation = CardDefaults.cardElevation(4.dp)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        Text("แสดงความเสี่ยง", fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = showHighRisk, onCheckedChange = { showHighRisk = it }, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("สูง (High)", fontSize = 12.sp, color = Color.Red)
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = showMediumRisk, onCheckedChange = { showMediumRisk = it }, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ปานกลาง (Med)", fontSize = 12.sp, color = Color(0xFFFF9800))
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = showLowRisk, onCheckedChange = { showLowRisk = it }, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ต่ำ (Low)", fontSize = 12.sp, color = AppGreen)
+                        }
+                    }
+                }
 
                 // ===== Loading =====
                 if (viewModel.isLoading) {

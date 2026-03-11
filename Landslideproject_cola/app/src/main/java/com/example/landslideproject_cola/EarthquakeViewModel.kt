@@ -124,10 +124,27 @@ class EarthquakeViewModel : ViewModel() {
                 if (response.isSuccessful) {
                     userProfile = response.body()
                 } else {
-                    errorMessage = "ไม่พบข้อมูลผู้ใช้"
+                    userProfile = null
                 }
             } catch (e: Exception) {
-                errorMessage = "Error: ${e.message}"
+                userProfile = null
+            }
+        }
+    }
+
+    fun updateProfile(context: Context, userId: String, request: UpdateProfileRequest, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                val response = EarthquakeClient.earthquakeAPI.updateUserProfile(userId, request)
+                if (response.isSuccessful) {
+                    Toast.makeText(context, "แก้ไขข้อมูลสำเร็จ", Toast.LENGTH_SHORT).show()
+                    getProfile(userId) // Refresh profile data
+                    onComplete()
+                } else {
+                    Toast.makeText(context, "แก้ไขข้อมูลไม่สำเร็จ: ${response.code()}", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -478,6 +495,26 @@ class EarthquakeViewModel : ViewModel() {
                     pinDashboard = response.body()
                 } else {
                     errorMessage = "ดึงข้อมูลหมุดไม่สำเร็จ"
+                }
+            } catch (e: Exception) {
+                errorMessage = "Error: ${e.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    // ================= USER PINS: GET DASHBOARD BY LOCATION =================
+    fun getDashboardByLocation(lat: Double, lon: Double) {
+        viewModelScope.launch {
+            isLoading = true
+            pinDashboard = null
+            try {
+                val response = EarthquakeClient.earthquakeAPI.getDashboardByLocation(lat, lon)
+                if (response.isSuccessful) {
+                    pinDashboard = response.body()
+                } else {
+                    errorMessage = "ดึงข้อมูลพิกัดไม่สำเร็จ"
                 }
             } catch (e: Exception) {
                 errorMessage = "Error: ${e.message}"

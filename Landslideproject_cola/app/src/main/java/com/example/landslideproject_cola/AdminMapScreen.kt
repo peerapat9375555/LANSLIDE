@@ -11,6 +11,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -30,6 +32,11 @@ fun AdminMapScreen(navController: NavHostController, viewModel: EarthquakeViewMo
     }
 
     val predictions = viewModel.predictions
+
+    // Filter State
+    var showHighRisk by remember { mutableStateOf(true) }
+    var showMediumRisk by remember { mutableStateOf(true) }
+    var showLowRisk by remember { mutableStateOf(true) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -58,7 +65,13 @@ fun AdminMapScreen(navController: NavHostController, viewModel: EarthquakeViewMo
                     },
                     update = { mapView ->
                         mapView.overlays.clear()
-                        predictions.forEach { item ->
+                        predictions.filter { item ->
+                            val isHigh = item.risk_level == "High"
+                            val isMedium = item.risk_level == "Medium"
+                            val isLow = item.risk_level == "Low"
+                            
+                            (isHigh && showHighRisk) || (isMedium && showMediumRisk) || (isLow && showLowRisk) || (!isHigh && !isMedium && !isLow)
+                        }.forEach { item ->
                             val poly = Polygon().apply {
                                 title = "${item.risk_level} risk"
                                 item.polygon.forEach { coord ->
@@ -75,6 +88,34 @@ fun AdminMapScreen(navController: NavHostController, viewModel: EarthquakeViewMo
                     },
                     modifier = Modifier.fillMaxSize()
                 )
+
+                // ===== Filters Overlay =====
+                Card(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)),
+                    elevation = CardDefaults.cardElevation(4.dp)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        Text("แสดงความเสี่ยง", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = showHighRisk, onCheckedChange = { showHighRisk = it }, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("สูง (High)", fontSize = 12.sp, color = Color.Red)
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = showMediumRisk, onCheckedChange = { showMediumRisk = it }, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ปานกลาง (Med)", fontSize = 12.sp, color = Color(0xFFFF9800))
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = showLowRisk, onCheckedChange = { showLowRisk = it }, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ต่ำ (Low)", fontSize = 12.sp, color = Color(0xFF4CAF50))
+                        }
+                    }
+                }
             }
         }
     }

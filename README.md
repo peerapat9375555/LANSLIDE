@@ -25,6 +25,7 @@
 - Admin ความน่าจะเป็น เรียงจากมากไปน้อย อัพรูปลงรายชื่อ ปุ่มลบรายชื่อ
 - แจ้งเตือนในระยะ 20 กม. ของUSER  แล้วก็สามารถกดเข้าไปดูตรงจุดที่แจ้งเตือนได้จะบอกข้อมูล แล้วก็จะขึ้นแจ้งเตือนก็ต่อเมื่อ admin กดยืนยันแล้ว
 - pv3: เพิ่มเส้นกั่น แถบ แฮมบาร์ เปลี่ยนไอคอนแอป   มีโนติเด้งข้างบน หรือล็อกจากเหตุใกล้ user20 กม       มีฟังก์ชั่นผู้ใช้ส่งข้อความ รูป ขอความช่วยเหลือ มาแจ้งแอดมิน   มีหน้าแอดมินเห็นเหตุที่แจ้ง แล้วกดยืนยัน เหตุจะไปหน้าประวัติการช่วยเหลือ
+- อัปเดตล่าสุด: เพิ่มฟังก์ชันอัปเดตข้อมูลโปรไฟล์ (มีการเข้ารหัสรหัสผ่านใหม่), ปรับระบบแผนที่ให้ซูมเข้าสู่เป้าหมายอัตโนมัติ (ระดับ 16.0), และเพิ่ม Checkbox คัดกรองระดับความเสี่ยง (สูง/กลาง/ต่ำ) บนแผนที่ของทั้ง User และ Admin
 
 - ลงดาต้าเบสใหม่ landsnot_db.sql ก่อนใช้งาน
 ---
@@ -71,7 +72,7 @@ GEE_PROJECT_ID=your-gee-project-id-here
 > ⚠️ **ห้ามใช้ key ของคนอื่น** แต่ละคนต้องสร้าง GEE Project ของตัวเอง
 
 ---
-
+่่่่่่่
 ### ขั้นตอนที่ 2: ตั้งค่าฐานข้อมูล (Database)
 
 1. เปิดโปรแกรม **XAMPP Control Panel** → กด Start **Apache** กับ **MySQL**
@@ -90,21 +91,21 @@ GEE_PROJECT_ID=your-gee-project-id-here
 # 1. เข้าโฟลเดอร์ server
 cd server
 
-# 2. สร้าง virtual environment
-python -m venv venv
+# 2. สร้าง virtual environment โดยใช้ py
+py -m venv venv
 
 # 3. เปิดใช้งาน (Windows CMD)
 venv\Scripts\activate
 
 # 4. ติดตั้ง dependencies ทั้งหมด
-pip install -r requirements.txt
+py -m pip install -r requirements.txt
 
 # 5. Authenticate Google Earth Engine (ครั้งแรกครั้งเดียว)
-python -c "import ee; ee.Authenticate()"
+py -c "import ee; ee.Authenticate()"
 # → จะเปิดหน้าเว็บ login Google แล้ว copy token กลับมาวาง
 
 # 6. ทดสอบว่า GEE ทำงานได้
-python -c "import ee; ee.Initialize(project='YOUR_PROJECT_ID'); print('GEE OK!')"
+py -c "import ee; ee.Initialize(project='YOUR_PROJECT_ID'); print('GEE OK!')"
 ```
 
 ---
@@ -113,7 +114,7 @@ python -c "import ee; ee.Initialize(project='YOUR_PROJECT_ID'); print('GEE OK!')
 
 ```bash
 # สั่ง seed ข้อมูลพิกัด 2,727 จุดลง DB + สร้าง Admin Account
-python server/seed_data.py
+py server/seed_data.py
 ```
 
 **Admin Account ที่สร้างอัตโนมัติ:**

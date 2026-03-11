@@ -18,9 +18,17 @@ sealed class Screen(val route: String, val name: String) {
     )
 
     data object Predictions : Screen(
-        route = "predictions_screen",
+        route = "predictions_screen?lat={lat}&lon={lon}",
         name = "การทำนาย"
-    )
+    ) {
+        fun createRoute(lat: Float? = null, lon: Float? = null): String {
+            return if (lat != null && lon != null) {
+                "predictions_screen?lat=$lat&lon=$lon"
+            } else {
+                "predictions_screen"
+            }
+        }
+    }
 
     data object Events : Screen(
         route = "events_screen",

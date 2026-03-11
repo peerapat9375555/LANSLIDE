@@ -16,6 +16,9 @@ interface EarthquakeAPI {
     @GET("api/user/{id}")
     suspend fun getUserProfile(@Path("id") id: String): Response<UserProfile>
 
+    @PUT("api/user/{id}")
+    suspend fun updateUserProfile(@Path("id") id: String, @Body data: UpdateProfileRequest): Response<GenericResponse>
+
     // ---------- PREDICTIONS ----------
     @GET("api/predictions")
     suspend fun getPredictions(): Response<List<PredictionResponseItem>> // Replaces old LandslidePrediction with the new Response format
@@ -89,6 +92,9 @@ interface EarthquakeAPI {
 
     @GET("api/pins/{pin_id}/dashboard")
     suspend fun getPinDashboard(@Path("pin_id") pinId: String): Response<UserPinDashboard>
+
+    @GET("api/dashboard/by-location")
+    suspend fun getDashboardByLocation(@Query("lat") lat: Double, @Query("lon") lon: Double): Response<UserPinDashboard>
 
     @DELETE("api/pins/{user_id}")
     suspend fun clearUserPins(@Path("user_id") userId: String): Response<GenericResponse>
