@@ -122,7 +122,12 @@ fun HomeScreen(
                     )
                 } else {
                     Card(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .clickable {
+                                navController.navigate(Screen.SetLocation.route) { launchSingleTop = true }
+                            },
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = AppWhite),
                         elevation = CardDefaults.cardElevation(2.dp)
@@ -134,7 +139,7 @@ fun HomeScreen(
                             Text("📍", fontSize = 32.sp)
                             Spacer(Modifier.height(8.dp))
                             Text("ยังไม่มีหมุดพื้นที่ส่วนตัว", fontWeight = FontWeight.Bold, color = AppTextDark)
-                            Text("ไปที่แผนที่เพื่อเพิ่มบนหน้าสรุปนี้", fontSize = 12.sp, color = AppTextGrey)
+                            Text("ไปที่ตั้งค่าที่อยู่เพื่อเพิ่มบนหน้าสรุปนี้", fontSize = 12.sp, color = AppTextGrey)
                         }
                     }
                 }

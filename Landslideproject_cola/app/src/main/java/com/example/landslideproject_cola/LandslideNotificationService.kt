@@ -64,6 +64,8 @@ class LandslideNotificationService : Service() {
             .build()
     }
 
+    private var pollingJob: Job? = null
+
     override fun onCreate() {
         super.onCreate()
         sharedPref = SharedPreferencesManager(this)
@@ -81,7 +83,9 @@ class LandslideNotificationService : Service() {
             return START_NOT_STICKY
         }
 
-        serviceScope.launch {
+        // Cancel previous job if startService is called multiple times
+        pollingJob?.cancel()
+        pollingJob = serviceScope.launch {
             while (isActive) {
                 try {
                     checkNewNotifications(userId)
