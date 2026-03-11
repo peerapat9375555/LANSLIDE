@@ -148,8 +148,10 @@ fun AdminSentNotificationHistoryScreen(navController: NavHostController, viewMod
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("✅ ", fontSize = 18.sp)
-                                        Text("ส่งการแจ้งเตือนสำเร็จ", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AppGreen)
+                                        val displayRiskText = if (alert.status == "approved") "✅ โดนยืนยันการแจ้งเตือน" else "⚠️ ตรวจพบความเสี่ยงจากโมเดล"
+                                        val displayColor = if (alert.status == "approved") AppGreen else Color(0xFFE65100) // Darker Orange
+                                        
+                                        Text(displayRiskText, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = displayColor)
                                         Spacer(modifier = Modifier.weight(1f))
                                         val riskColor = when (alert.risk_level) { "High" -> Color.Red; "Medium" -> Color(0xFFFF9800); else -> AppGreen }
                                         Text(alert.risk_level, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = riskColor)

@@ -106,18 +106,18 @@ def load_resources():
     
     print("Loading ML Model...")
     try:
-        ML_MODEL = joblib.load(os.path.join(PROJECT_ROOT, 'best_ml_model.pkl'))
+        ML_MODEL = joblib.load(os.path.join(PROJECT_ROOT, 'ml_pipeline', 'models', 'best_ml_model.pkl'))
     except Exception as e:
         print("Warning: best_ml_model.pkl not found.")
         
     print("Loading Scaler...")
     try:
-        SCALER = joblib.load(os.path.join(PROJECT_ROOT, 'landslide_scaler.pkl'))
+        SCALER = joblib.load(os.path.join(PROJECT_ROOT, 'ml_pipeline', 'models', 'landslide_scaler.pkl'))
     except Exception as e:
         print("Warning: landslide_scaler.pkl not found.")
 
     print("Loading Location Lookup CSV...")
-    csv_path = os.path.join(PROJECT_ROOT, 'nan_province_data.csv')
+    csv_path = os.path.join(PROJECT_ROOT, 'ml_pipeline', 'data', 'nan_province_data.csv')
     try:
         LOCATION_LOOKUP_DF = pd.read_csv(csv_path)
         print(f"Loaded {len(LOCATION_LOOKUP_DF)} location records for tambon/district lookup.")
@@ -362,7 +362,7 @@ async def trigger_prediction():
             cursor.close()
             conn.close()
             
-    with open(os.path.join(PROJECT_ROOT, 'latest_predictions.json'), 'w') as f:
+    with open(os.path.join(PROJECT_ROOT, 'server', 'data', 'latest_predictions.json'), 'w') as f:
         json.dump(response_payload, f)
         
     return {"status": "success", "grids_fetched": len(unique_grids), "points_predicted": len(response_payload)}
@@ -372,7 +372,7 @@ async def trigger_prediction():
 async def get_predictions():
     # Return sorted by Risk where Red (High) is at the back of the array so it draws ON TOP (Z-Index rendering)
     try:
-        with open(os.path.join(PROJECT_ROOT, 'latest_predictions.json'), 'r') as f:
+        with open(os.path.join(PROJECT_ROOT, 'server', 'data', 'latest_predictions.json'), 'r') as f:
             data = json.load(f)
             
         # Z-Index Priority: Green (Low) -> Yellow (Medium) -> Red (High)
@@ -728,13 +728,13 @@ async def get_sent_notification_history(startDate: str = None, endDate: str = No
         raise HTTPException(status_code=500, detail="Database connection error")
     try:
         cursor = conn.cursor(dictionary=True)
-        # Base query
+        # Base query to fetch all historical predictions that were Medium or High risk
         query = """
         SELECT pl.log_id, pl.node_id, pl.risk_level, pl.probability, pl.timestamp, pl.status,
                sn.latitude, sn.longitude
         FROM prediction_logs pl
         JOIN static_nodes sn ON pl.node_id = sn.node_id
-        WHERE pl.status = 'approved'
+        WHERE pl.risk_level IN ('Medium', 'High')
         """
         
         args = []
