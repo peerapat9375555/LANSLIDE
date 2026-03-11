@@ -82,7 +82,7 @@ GEE_PROJECT_ID=your-gee-project-id-here
 1. เปิดโปรแกรม **XAMPP Control Panel** → กด Start **Apache** กับ **MySQL**
 2. เข้า phpMyAdmin: `http://localhost/phpmyadmin`
 3. สร้างฐานข้อมูลใหม่ชื่อ **`landsnot_db`** (Collation: `utf8mb4_general_ci`)
-4. เข้าไปที่แท็บ **Import** → อัปโหลดไฟล์ **`landsnot_db.sql`**
+4. เข้าไปที่แท็บ **Import** → อัปโหลดไฟล์ **`database/init_database.sql`**
 
 ---
 
@@ -200,7 +200,21 @@ uvicorn main:app --reload
 | lightgbm | LightGBM Classifier |
 | catboost | CatBoost Classifier |
 
-ติดตั้ง optional packages:
-```bash
-pip install xgboost lightgbm catboost
-```
+> 💡 **ข้อควรรู้เรื่อง Virtual Environment (venv) สำหรับ ML Pipeline**
+>
+> คุณ **"ไม่จำเป็น"** ต้องสร้าง venv ใหม่แยกต่างหากเพื่อรันเทรนโมเดลใน `ml_pipeline/`
+> คุณสามารถเปิดใช้ venv ของฝั่งเซิร์ฟเวอร์ที่เราสร้างไว้แล้ว (ใน `server/venv`) ทำงานได้เลย โดยมีขั้นตอนง่ายๆ ดังนี้:
+> 
+> ```bash
+> # 1. เข้าไปที่โฟลเดอร์ root ของโปรเจค
+> cd Project_mobile_app
+> 
+> # 2. เปิดใช้งาน venv ของเซิร์ฟเวอร์
+> server\venv\Scripts\activate
+> 
+> # 3. ติดตั้ง ML Libraries เสริม (ทำแค่ครั้งเดียว)
+> pip install xgboost lightgbm catboost
+> 
+> # 4. สั่งรันสคริปต์เทรนโมเดล
+> python ml_pipeline/retrain_model.py
+> ```
