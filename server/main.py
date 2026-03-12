@@ -318,7 +318,9 @@ async def trigger_prediction():
             cursor.close()
             conn.close()
             
-    with open(os.path.join(PROJECT_ROOT, 'server', 'data', 'latest_predictions.json'), 'w') as f:
+    data_dir = os.path.join(PROJECT_ROOT, 'server', 'data')
+    os.makedirs(data_dir, exist_ok=True)
+    with open(os.path.join(data_dir, 'latest_predictions.json'), 'w') as f:
         json.dump(response_payload, f)
         
     return {"status": "success", "grids_fetched": len(unique_grids), "points_predicted": len(response_payload)}
@@ -1425,10 +1427,13 @@ async def trigger_gee():
     global STATIC_DATA_CACHE
     import sys, math
     
-    # Add parent dir so we can import gee_extractor
+    # Add ml_pipeline dir so we can import gee_extractor
     parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ml_pipeline_dir = os.path.join(parent_dir, 'ml_pipeline')
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
+    if ml_pipeline_dir not in sys.path:
+        sys.path.insert(0, ml_pipeline_dir)
     
     try:
         from gee_extractor import initialize_gee, build_combined_image
